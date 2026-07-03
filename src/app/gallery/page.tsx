@@ -17,6 +17,7 @@ export default function GalleryPage() {
   const [file, setFile] = useState<File | null>(null);
   const [alt, setAlt] = useState("");
   const [caption, setCaption] = useState("");
+  const [slot, setSlot] = useState("gallery");
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -43,10 +44,12 @@ export default function GalleryPage() {
       form.append("file", file);
       form.append("alt", alt);
       form.append("caption", caption);
+      form.append("slot", slot);
       await api("/api/gallery/upload", { method: "POST", body: form });
       setFile(null);
       setAlt("");
       setCaption("");
+      setSlot("gallery");
       (document.getElementById("gal-file") as HTMLInputElement).value = "";
       await load();
       setMsg("✅ Uploaded & publishing to the live site.");
@@ -120,6 +123,18 @@ export default function GalleryPage() {
           <div className="field">
             <label>Caption (shown under the photo)</label>
             <input value={caption} onChange={(e) => setCaption(e.target.value)} />
+          </div>
+          <div className="field">
+            <label>Where it shows</label>
+            <select value={slot} onChange={(e) => setSlot(e.target.value)}>
+              <option value="gallery">gallery</option>
+              <option value="about">about</option>
+              <option value="before-after">before-after</option>
+            </select>
+            <div className="hint">
+              gallery = /gallery wall · about = About page grid · before-after
+              = Results page proof section
+            </div>
           </div>
         </div>
         <div className="form-foot">

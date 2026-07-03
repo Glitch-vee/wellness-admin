@@ -3,6 +3,7 @@ import { sb } from "@/lib/db";
 import { publishSite } from "@/lib/publish";
 
 const ALLOWED = ["jpg", "jpeg", "png", "webp", "gif", "avif"];
+const SLOTS = ["gallery", "about", "before-after"];
 const MAX_BYTES = 4 * 1024 * 1024; // stay under Vercel's request body limit
 
 export async function POST(request: Request) {
@@ -38,12 +39,16 @@ export async function POST(request: Request) {
 
   const { data: pub } = client.storage.from("media").getPublicUrl(path);
 
+  const rawSlot = String(form.get("slot") ?? "gallery");
+  const slot = SLOTS.includes(rawSlot) ? rawSlot : "gallery";
+
   const { data: row, error: insErr } = await client
     .from("gallery_images")
     .insert({
       url: pub.publicUrl,
       alt: String(form.get("alt") ?? ""),
       caption: String(form.get("caption") ?? ""),
+      slot,
       sort_order: Math.floor(Date.now() / 1000),
     })
     .select()

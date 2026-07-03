@@ -107,6 +107,13 @@ export const TABLES: Record<string, TableSpec> = {
     label: "Gallery",
     orderBy: "sort_order",
     fields: [
+      {
+        name: "slot",
+        label: "Where it shows",
+        type: "select",
+        options: ["gallery", "about", "before-after"],
+        hint: "gallery = /gallery wall · about = About page grid · before-after = Results page proof section",
+      },
       { name: "alt", label: "Alt text (describe the image)", type: "text" },
       { name: "caption", label: "Caption", type: "text" },
       { name: "sort_order", label: "Sort order", type: "number" },
