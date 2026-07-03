@@ -8,12 +8,16 @@ type Img = {
   url: string;
   alt: string;
   caption: string;
+  slot: string;
   sort_order: number;
   active: boolean;
 };
 
+const SLOTS = ["gallery", "about", "before-after"] as const;
+
 export default function GalleryPage() {
   const [rows, setRows] = useState<Img[]>([]);
+  const [tab, setTab] = useState<string>("all");
   const [file, setFile] = useState<File | null>(null);
   const [alt, setAlt] = useState("");
   const [caption, setCaption] = useState("");
@@ -89,6 +93,13 @@ export default function GalleryPage() {
     }
   };
 
+  const setRow = (id: string, patch: Partial<Img>) =>
+    setRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+
+  const visible = tab === "all" ? rows : rows.filter((r) => r.slot === tab);
+  const count = (s: string) =>
+    s === "all" ? rows.length : rows.filter((r) => r.slot === s).length;
+
   return (
     <>
       <div className="page-head">
@@ -127,9 +138,11 @@ export default function GalleryPage() {
           <div className="field">
             <label>Where it shows</label>
             <select value={slot} onChange={(e) => setSlot(e.target.value)}>
-              <option value="gallery">gallery</option>
-              <option value="about">about</option>
-              <option value="before-after">before-after</option>
+              {SLOTS.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
             </select>
             <div className="hint">
               gallery = /gallery wall · about = About page grid · before-after
@@ -144,41 +157,77 @@ export default function GalleryPage() {
         </div>
       </form>
 
+      <div className="tabs" role="tablist" aria-label="Filter by slot">
+        {["all", ...SLOTS].map((s) => (
+          <button
+            key={s}
+            type="button"
+            role="tab"
+            aria-selected={tab === s}
+            className={`tab ${tab === s ? "on" : ""}`}
+            onClick={() => setTab(s)}
+          >
+            {s === "all" ? "All" : s}
+            <span className="tab__count">{count(s)}</span>
+          </button>
+        ))}
+      </div>
+
       <div className="gal-grid">
-        {rows.map((img, i) => (
+        {visible.map((img) => (
           <div className="gal-card" key={img.id}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={img.url} alt={img.alt} loading="lazy" />
             <div className="pad">
+              <div className="gal-card__slotline">
+                <span className={`chip chip--slot chip--slot-${img.slot}`}>
+                  {img.slot}
+                </span>
+                <select
+                  className="gal-card__slotpick"
+                  value={img.slot}
+                  aria-label="Move to slot"
+                  disabled={busy}
+                  onChange={(e) => {
+                    const next = { ...img, slot: e.target.value };
+                    setRow(img.id, { slot: e.target.value });
+                    update(next);
+                  }}
+                >
+                  {SLOTS.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <input
                 value={img.alt}
                 placeholder="Alt text"
-                onChange={(e) => {
-                  const next = [...rows];
-                  next[i] = { ...img, alt: e.target.value };
-                  setRows(next);
-                }}
+                onChange={(e) => setRow(img.id, { alt: e.target.value })}
               />
               <input
                 value={img.caption}
                 placeholder="Caption"
-                onChange={(e) => {
-                  const next = [...rows];
-                  next[i] = { ...img, caption: e.target.value };
-                  setRows(next);
-                }}
+                onChange={(e) => setRow(img.id, { caption: e.target.value })}
               />
               <div className="row-actions" style={{ marginLeft: 0, flexWrap: "wrap", gap: 6 }}>
-                <button className="btn btn--sm" onClick={() => update(rows[i])} disabled={busy}>
+                <button
+                  className="btn btn--sm"
+                  onClick={() => {
+                    const cur = rows.find((r) => r.id === img.id);
+                    if (cur) update(cur);
+                  }}
+                  disabled={busy}
+                >
                   Save
                 </button>
                 <button
                   className="btn btn--sm"
                   onClick={() => {
-                    const next = [...rows];
-                    next[i] = { ...img, active: !img.active };
-                    setRows(next);
-                    update(next[i]);
+                    const next = { ...img, active: !img.active };
+                    setRow(img.id, { active: next.active });
+                    update(next);
                   }}
                   disabled={busy}
                 >
@@ -197,6 +246,9 @@ export default function GalleryPage() {
           </div>
         ))}
       </div>
+      {rows.length > 0 && visible.length === 0 && (
+        <div className="card card--flat">Nothing in this slot yet.</div>
+      )}
       {rows.length === 0 && (
         <div className="card card--flat">
           No images yet — upload your first one above. 📸
