@@ -1062,6 +1062,32 @@ export function StylePanel({
     );
   };
 
+  /** A bare-number field (opacity/rotate/scale) — the value has no unit
+   * suffix, unlike freeNum's token+unit pairs or offsetNum's px fields. */
+  const numField = (
+    label: string,
+    prop: string,
+    min: number,
+    max: number,
+    ph: string
+  ) => (
+    <div className="field bkstyle__field">
+      <label>{label}</label>
+      <input
+        className="bkstyle__num"
+        type="number"
+        min={min}
+        max={max}
+        placeholder={ph}
+        value={val(prop)}
+        onChange={(e) => {
+          const raw = e.target.value.trim();
+          onPatch({ [prop]: raw === "" ? null : raw });
+        }}
+      />
+    </div>
+  );
+
   /** Stack order — shared by overlay and sticky. */
   const zField = () => (
     <div className="field bkstyle__field">
@@ -1284,6 +1310,80 @@ export function StylePanel({
             flush left.
           </p>
         )}
+      </fieldset>
+
+      <fieldset className="bkstyle__group">
+        <legend>Freedom (beyond the presets)</legend>
+        <div className="bkstyle__row">
+          {numField("Opacity %", "opacity", 0, 100, "0-100")}
+          {numField("Rotate °", "rotate", -360, 360, "±deg")}
+          {numField("Scale %", "scale", 10, 300, "100 = normal")}
+        </div>
+        <div className="bkstyle__row">
+          {(() => {
+            const m = /^(\d{1,2})px$/.exec(val("borderWidth"));
+            return (
+              <div className="field bkstyle__field">
+                <label>Custom border width</label>
+                <input
+                  className="bkstyle__num"
+                  type="number"
+                  min={0}
+                  max={20}
+                  placeholder="px"
+                  value={m ? m[1] : ""}
+                  onChange={(e) => {
+                    const raw = e.target.value.trim();
+                    onPatch({ borderWidth: raw === "" ? null : `${raw}px` });
+                  }}
+                />
+              </div>
+            );
+          })()}
+          {sel("Border style", "borderStyle", [
+            { value: "", label: "Solid (default)" },
+            { value: "solid", label: "Solid" },
+            { value: "dashed", label: "Dashed" },
+            { value: "dotted", label: "Dotted" },
+          ])}
+          <div className="field bkstyle__field">
+            <label>Border colour hex</label>
+            <input
+              className="bkstyle__hex"
+              value={val("borderColor")}
+              placeholder="#hex"
+              spellCheck={false}
+              onChange={(e) => {
+                const raw = e.target.value.trim();
+                onPatch({ borderColor: raw === "" ? null : raw });
+              }}
+            />
+          </div>
+        </div>
+        {(val("borderWidth") !== "" || val("borderColor") !== "") && (
+          <p className="hint">
+            A custom width or colour here replaces the Border preset above
+            entirely.
+          </p>
+        )}
+        <div className="bkstyle__row">
+          <div className="field bkstyle__field bkstyle__field--wide">
+            <label>Background image URL</label>
+            <input
+              value={val("bgImage")}
+              placeholder="https://... or /path"
+              spellCheck={false}
+              onChange={(e) => {
+                const raw = e.target.value.trim();
+                onPatch({ bgImage: raw === "" ? null : raw });
+              }}
+            />
+          </div>
+        </div>
+        <p className="hint">
+          Fills the block behind its content, cropped to cover — combine with
+          Background colour above as a fallback while it loads.
+        </p>
       </fieldset>
 
       <fieldset className="bkstyle__group">

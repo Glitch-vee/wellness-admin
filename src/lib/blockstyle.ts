@@ -103,6 +103,14 @@ const STYLE_ENUMS: Record<string, string[]> = {
   bottom: [],
   z: [],
   width: [],
+  // Free-form escape hatches beyond the preset tokens.
+  opacity: [],
+  rotate: [],
+  scale: [],
+  borderWidth: [],
+  borderColor: [],
+  bgImage: [],
+  borderStyle: ["solid", "dashed", "dotted"],
 };
 
 /* ---------- free-value contract (mirrors the site engine EXACTLY) ---------- */
@@ -123,6 +131,11 @@ const WEIGHT_RE = /^[1-9]00$/; //          any 100…900
 const OFFSET_RE = /^-?\d{1,4}px$/; //      top/left/right/bottom, signed
 const Z_RE = /^\d{1,4}$/; //               z-index, plain integer
 const WIDTH_PCT_RE = /^\d{1,3}%$/; //      width, bare percentage
+const OPACITY_RE = /^\d{1,3}$/; //         opacity, bare 0-100
+const ROTATE_RE = /^-?\d{1,3}$/; //        rotate, signed degrees
+const SCALE_RE = /^\d{1,3}$/; //           scale, bare 10-300 (%)
+const BORDER_W_RE = /^\d{1,2}px$/; //      borderWidth, 0-20px
+const BG_URL_RE = /^(https:\/\/|\/)[^"'()\\]*$/; // bgImage, no quotes/parens/backslash
 
 function clampPx(v: string, min: number, max: number): string {
   return `${Math.min(max, Math.max(min, parseInt(v, 10)))}px`;
@@ -147,6 +160,8 @@ export function cleanValue(prop: string, value: unknown): string | null {
   // Colours are their own token-OR-#hex allowlist.
   if (prop === "color") return isStyleColor(v) ? v : null;
   if (prop === "background") return isStyleBackground(v) ? v : null;
+  if (prop === "borderColor") return isStyleColor(v) ? v : null;
+  if (prop === "bgImage") return BG_URL_RE.test(v) ? v : null;
 
   // A known token always wins.
   const tokens = STYLE_ENUMS[prop];
@@ -180,6 +195,20 @@ export function cleanValue(prop: string, value: unknown): string | null {
         : null;
     case "width":
       return WIDTH_PCT_RE.test(v) ? clampPct(v, 5, 100) : null;
+    case "opacity":
+      return OPACITY_RE.test(v)
+        ? String(Math.min(100, Math.max(0, parseInt(v, 10))))
+        : null;
+    case "rotate":
+      return ROTATE_RE.test(v)
+        ? String(Math.min(360, Math.max(-360, parseInt(v, 10))))
+        : null;
+    case "scale":
+      return SCALE_RE.test(v)
+        ? String(Math.min(300, Math.max(10, parseInt(v, 10))))
+        : null;
+    case "borderWidth":
+      return BORDER_W_RE.test(v) ? clampPx(v, 0, 20) : null;
     case "lineHeight":
       return RATIO_RE.test(v)
         ? String(Math.min(3, Math.max(0.8, parseFloat(v))))
