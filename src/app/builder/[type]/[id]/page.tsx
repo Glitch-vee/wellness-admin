@@ -127,30 +127,25 @@ function isRowKind(row: Row): boolean {
 type Tree = { top: Row[]; childrenOf: Map<string, Row[]> };
 
 /**
- * Split the flat, sort-ordered block list into a one-level-of-MAP tree that
- * mirrors the site's builder: parent_id null → top level; a block whose
- * parent is a TOP-LEVEL row becomes that row's child — including another
- * row, so you can nest one row inside another. Anything deeper — a block
- * whose parent is itself a NESTED row — falls back to top level: this rail
- * only tracks one level of childrenOf, so a nested row's own children show
- * as flat cards rather than visually indented under it. They still save and
- * render correctly (the site's blocktree.ts has no such limit); it's an
- * admin-rail display simplification, not a data cap. Order within each scope
- * is by sort_order.
+ * Split the flat, sort-ordered block list into a tree that mirrors the
+ * site's builder: parent_id null → top level; a block whose parent is ANY
+ * row (top-level or itself nested) becomes that row's child in childrenOf,
+ * keyed by the parent's own id — so childrenOf works at any depth, not just
+ * one level. The renderer/palette still cap actual nesting at 2 levels; this
+ * function just reflects whatever parent_id structure exists (matches
+ * blocktree.ts on the site side). Order within each scope is by sort_order.
  */
 function buildTree(list: Row[]): Tree {
   const sorted = [...list].sort(
     (a, b) => Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0)
   );
   const byId = new Map(sorted.map((r) => [r.id, r]));
-  const isTopRow = (r: Row | undefined) =>
-    !!r && isRowKind(r) && parentIdOf(r) === "";
   const childrenOf = new Map<string, Row[]>();
   const top: Row[] = [];
   for (const b of sorted) {
     const pid = parentIdOf(b);
     const parent = pid ? byId.get(pid) : undefined;
-    if (parent && isTopRow(parent)) {
+    if (parent && isRowKind(parent)) {
       const arr = childrenOf.get(pid) ?? [];
       arr.push(b);
       childrenOf.set(pid, arr);
@@ -162,12 +157,20 @@ function buildTree(list: Row[]): Tree {
 }
 
 /** Flatten a tree back to one DFS list: each row immediately followed by its
- *  children. This is the desired global sort_order for a reorder. */
-function flattenTree(top: Row[], childrenOf: Map<string, Row[]>): Row[] {
+ *  children (recursing into a nested row's own children too, capped at the
+ *  same 2-level depth the renderer enforces). This is the desired global
+ *  sort_order for a reorder. */
+function flattenTree(
+  top: Row[],
+  childrenOf: Map<string, Row[]>,
+  depth = 0
+): Row[] {
   const out: Row[] = [];
   for (const t of top) {
     out.push(t);
-    if (isRowKind(t)) out.push(...(childrenOf.get(t.id) ?? []));
+    if (isRowKind(t) && depth < 2) {
+      out.push(...flattenTree(childrenOf.get(t.id) ?? [], childrenOf, depth + 1));
+    }
   }
   return out;
 }
@@ -961,14 +964,11 @@ export default function BuilderPage() {
       try {
         // A row is copied WITH its children: clone the row first, then each
         // child re-parented to the new row (parent_id has on-delete-cascade,
-        // so the copies live and die with their new row). Read children
-        // straight off the flat list rather than buildTree's childrenOf —
-        // that map only tracks children of TOP-level rows, so a nested row's
-        // own kids wouldn't show up in it.
+        // so the copies live and die with their new row). buildTree's
+        // childrenOf now tracks children of ANY row (see buildTree above),
+        // so this reads correctly whether `block` is top-level or nested.
         if (isRowKind(block)) {
-          const kids = blocksRef.current
-            .filter((b) => parentIdOf(b) === block.id)
-            .sort((a, b) => Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0));
+          const kids = buildTree(blocksRef.current).childrenOf.get(block.id) ?? [];
           const { d: rowRes } = await sendSection(
             `/api/table/${cfg.childTable}`,
             "POST",
@@ -1534,6 +1534,38 @@ export default function BuilderPage() {
     );
   };
 
+  /**
+   * A row's children, recursively — a child that's itself a row gets its own
+   * kids rendered under it too (one more level), capped at depth 2 to match
+   * the renderer/palette's nesting limit. `depth` counts row-levels: 1 for a
+   * top row's direct kids, 2 for a nested row's kids (the deepest allowed).
+   */
+  const renderRowKids = (rowId: string, depth: number) => {
+    if (depth > 2) return null;
+    const kids = tree.childrenOf.get(rowId) ?? [];
+    return (
+      <>
+        {kids.map((c, ci) => (
+          <Fragment key={c.id}>
+            {renderCard(c, { isChild: true, idx: ci, count: kids.length, rowId })}
+            {isRowKind(c) && renderRowKids(c.id, depth + 1)}
+          </Fragment>
+        ))}
+        <button
+          type="button"
+          className="bcard-addinside"
+          disabled={busy}
+          onClick={() => {
+            setPaletteParent(rowId);
+            setPalette(true);
+          }}
+        >
+          ＋ Add inside
+        </button>
+      </>
+    );
+  };
+
   if (!cfg && !isSite) {
     return <div className="msg msg--err">Unknown builder type.</div>;
   }
@@ -1740,7 +1772,6 @@ export default function BuilderPage() {
             const prev = ti > 0 ? tree.top[ti - 1] : null;
             const moveIntoRow =
               prev && isRowKind(prev) && !isRow ? prev.id : null;
-            const kids = tree.childrenOf.get(b.id) ?? [];
             return (
               <Fragment key={b.id}>
                 {renderCard(b, {
@@ -1749,29 +1780,7 @@ export default function BuilderPage() {
                   count: tree.top.length,
                   moveIntoRow,
                 })}
-                {isRow && (
-                  <>
-                    {kids.map((c, ci) =>
-                      renderCard(c, {
-                        isChild: true,
-                        idx: ci,
-                        count: kids.length,
-                        rowId: b.id,
-                      })
-                    )}
-                    <button
-                      type="button"
-                      className="bcard-addinside"
-                      disabled={busy}
-                      onClick={() => {
-                        setPaletteParent(b.id);
-                        setPalette(true);
-                      }}
-                    >
-                      ＋ Add inside
-                    </button>
-                  </>
-                )}
+                {isRow && renderRowKids(b.id, 1)}
               </Fragment>
             );
           })}
