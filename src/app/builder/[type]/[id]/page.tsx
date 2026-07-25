@@ -558,24 +558,6 @@ export default function BuilderPage() {
           return next;
         });
         showFlash({ text: "Rotation draft updated", tone: "ok" });
-      } else if (d?.type === "cms:block-move" && d.id) {
-        // Free drag-to-move for an overlay block — top/left, px.
-        if (!cfg) return;
-        const id = d.id;
-        const block = blocksRef.current.find((r) => r.id === id);
-        if (!block) return;
-        const style = jsonOf(block, "style");
-        style.top = d.top;
-        style.left = d.left;
-        setBlocks((bs) => bs.map((b) => (b.id === id ? { ...b, style } : b)));
-        if (id === selectedRef.current)
-          setDraft((cur) => (cur ? { ...cur, style } : cur));
-        setDirtyBlockIds((prev) => {
-          const next = new Set(prev);
-          next.add(id);
-          return next;
-        });
-        showFlash({ text: "Position draft updated", tone: "ok" });
       } else if (d?.type === "cms:block-freeplace" && d.id) {
         // Dropped in open canvas space — promote to free position (this is
         // what actually makes top/left take effect; CSS ignores them
