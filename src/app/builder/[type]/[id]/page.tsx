@@ -453,18 +453,33 @@ export default function BuilderPage() {
         shift?: boolean;
         action?: "front" | "back" | "forward" | "backward"; // cms:block-layer
       };
-      /** Shared z-nudge for cms:block-key's [ / ] and the on-canvas layer
-       * buttons — only ever acts on the currently selected block. */
+      /** Shared layer-number nudge for cms:block-key's [ / ] and the
+       * on-canvas layer buttons — only ever acts on the currently selected
+       * block. props.layer doubles as stacking order (site synthesizes it
+       * into z-index at render time) AND the reflow-grouping tag, so this
+       * is the same number the rail's Layer field shows — not a hidden
+       * separate value. */
       const nudgeLayer = (action: "front" | "back" | "forward" | "backward") => {
-        const style = draftRef.current?.style ?? {};
-        const cur = Number(style.z ?? 0) || 0;
-        const z =
+        const id = selectedRef.current;
+        if (!id) return;
+        const block = blocksRef.current.find((r) => r.id === id);
+        if (!block) return;
+        const props = jsonOf(block, "props");
+        const cur = parseInt(String(props.layer ?? ""), 10) || 0;
+        const next =
           action === "front"
             ? 999
             : action === "back"
               ? 0
               : Math.min(999, Math.max(0, cur + (action === "forward" ? 1 : -1)));
-        patchBlockStyleRef.current({ z: String(z) });
+        props.layer = String(next);
+        setBlocks((bs) => bs.map((b) => (b.id === id ? { ...b, props } : b)));
+        setDraft((cur2) => (cur2 ? { ...cur2, props } : cur2));
+        setDirtyBlockIds((prev) => {
+          const next2 = new Set(prev);
+          next2.add(id);
+          return next2;
+        });
       };
       if (d?.type === "cms:block-focus" && d.id) {
         if (d.id === "hero") {

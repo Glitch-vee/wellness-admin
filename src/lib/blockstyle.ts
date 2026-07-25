@@ -93,15 +93,16 @@ const STYLE_ENUMS: Record<string, string[]> = {
   paddingSm: STYLE_PADDINGS,
   marginTopSm: STYLE_MARGINS,
   marginBottomSm: STYLE_MARGINS,
-  // Layering: hideOn/position are token-only; the offsets + z are free-value
+  // Layering: hideOn/position are token-only; the offsets are free-value
   // only (empty token list — see cleanValue's free-form switch below).
+  // Stacking order is no longer a style prop — see props.layer instead
+  // (OfferSections.tsx synthesizes it into z-index at render time).
   hideOn: ["mobile", "desktop"],
   position: ["overlay", "sticky"],
   top: [],
   left: [],
   right: [],
   bottom: [],
-  z: [],
   width: [],
   height: [],
   // Free-form escape hatches beyond the preset tokens.
@@ -130,7 +131,6 @@ const RATIO_RE = /^\d(?:\.\d{1,2})?$/; //  lineHeight
 const LETTER_RE = /^(-?\d(?:\.\d{1,2})?)(em|px)$/; // letterSpacing
 const WEIGHT_RE = /^[1-9]00$/; //          any 100…900
 const OFFSET_RE = /^-?\d{1,4}px$/; //      top/left/right/bottom, signed
-const Z_RE = /^\d{1,4}$/; //               z-index, plain integer
 const WIDTH_PCT_RE = /^\d{1,3}%$/; //      width/height, bare percentage
 const SIZE_PX_RE = /^\d{1,4}px$/; //       width/height, px form, 20-4000
 const OPACITY_RE = /^\d{1,3}$/; //         opacity, bare 0-100
@@ -191,10 +191,6 @@ export function cleanValue(prop: string, value: unknown): string | null {
     case "right":
     case "bottom":
       return OFFSET_RE.test(v) ? clampPx(v, -2000, 2000) : null;
-    case "z":
-      return Z_RE.test(v)
-        ? String(Math.min(999, Math.max(0, parseInt(v, 10))))
-        : null;
     case "width":
     case "height":
       if (WIDTH_PCT_RE.test(v)) return clampPct(v, 5, 100);
