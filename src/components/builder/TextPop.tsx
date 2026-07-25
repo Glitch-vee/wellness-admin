@@ -161,16 +161,22 @@ const TextPop = forwardRef<
     [reposition]
   );
 
-  // Keep the pop glued to the text when the admin page scrolls or resizes.
+  // Keep the pop glued to the text when the admin page scrolls or resizes —
+  // including layout shifts (the Blocks rail opening/closing) that move or
+  // resize the iframe without firing a window resize event.
   useEffect(() => {
     const on = () => reposition();
     window.addEventListener("scroll", on, true);
     window.addEventListener("resize", on);
+    const frame = iframeRef.current;
+    const ro = frame ? new ResizeObserver(on) : null;
+    if (frame) ro?.observe(frame);
     return () => {
       window.removeEventListener("scroll", on, true);
       window.removeEventListener("resize", on);
+      ro?.disconnect();
     };
-  }, [reposition]);
+  }, [reposition, iframeRef]);
 
   /** Undo the unsaved live changes to `key`, so the preview stays honest. */
   const revertKey = useCallback(

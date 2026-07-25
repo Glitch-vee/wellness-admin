@@ -84,11 +84,15 @@ const MediaPop = forwardRef<
     const on = () => reposition();
     window.addEventListener("scroll", on, true);
     window.addEventListener("resize", on);
+    const frame = iframeRef.current;
+    const ro = frame ? new ResizeObserver(on) : null;
+    if (frame) ro?.observe(frame);
     return () => {
       window.removeEventListener("scroll", on, true);
       window.removeEventListener("resize", on);
+      ro?.disconnect();
     };
-  }, [reposition]);
+  }, [reposition, iframeRef]);
 
   // React to the builder selecting/clearing a block.
   useEffect(() => {

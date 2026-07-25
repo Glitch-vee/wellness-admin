@@ -148,16 +148,22 @@ const BlockStylePop = forwardRef<
     [reposition]
   );
 
-  // Keep the bar glued to the block as the admin page scrolls / resizes.
+  // Keep the bar glued to the block as the admin page scrolls / resizes —
+  // including layout shifts (the Blocks rail opening/closing) that move or
+  // resize the iframe without firing a window resize event.
   useEffect(() => {
     const on = () => reposition();
     window.addEventListener("scroll", on, true);
     window.addEventListener("resize", on);
+    const frame = iframeRef.current;
+    const ro = frame ? new ResizeObserver(on) : null;
+    if (frame) ro?.observe(frame);
     return () => {
       window.removeEventListener("scroll", on, true);
       window.removeEventListener("resize", on);
+      ro?.disconnect();
     };
-  }, [reposition]);
+  }, [reposition, iframeRef]);
 
   // Reposition when the drawer opens/closes (its estimated height changes).
   useEffect(() => {
