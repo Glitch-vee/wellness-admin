@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
-import { timeAgo } from "@/components/stats/Feed";
+import { timeAgo } from "@/components/molecules/Feed";
 import "../grow.css";
 
 /**

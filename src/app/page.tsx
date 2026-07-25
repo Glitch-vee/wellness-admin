@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { api, saveMsg, type Publish } from "@/lib/api";
-import StatTile from "@/components/stats/StatTile";
-import HBar from "@/components/stats/HBar";
-import Feed, { timeAgo, type FeedItem } from "@/components/stats/Feed";
+import StatTile from "@/components/molecules/StatTile";
+import HBar from "@/components/atoms/HBar";
+import Feed, { timeAgo, type FeedItem } from "@/components/molecules/Feed";
 import "./grow.css";
 
 /**

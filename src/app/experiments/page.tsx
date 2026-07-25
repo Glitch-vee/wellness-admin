@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { pageMeta } from "@/lib/pages";
 import InlinePreview from "@/components/InlinePreview";
-import HBar from "@/components/stats/HBar";
+import HBar from "@/components/atoms/HBar";
 import "../grow.css";
 
 /**
