@@ -103,6 +103,7 @@ const STYLE_ENUMS: Record<string, string[]> = {
   bottom: [],
   z: [],
   width: [],
+  height: [],
   // Free-form escape hatches beyond the preset tokens.
   opacity: [],
   rotate: [],
@@ -130,7 +131,8 @@ const LETTER_RE = /^(-?\d(?:\.\d{1,2})?)(em|px)$/; // letterSpacing
 const WEIGHT_RE = /^[1-9]00$/; //          any 100…900
 const OFFSET_RE = /^-?\d{1,4}px$/; //      top/left/right/bottom, signed
 const Z_RE = /^\d{1,4}$/; //               z-index, plain integer
-const WIDTH_PCT_RE = /^\d{1,3}%$/; //      width, bare percentage
+const WIDTH_PCT_RE = /^\d{1,3}%$/; //      width/height, bare percentage
+const SIZE_PX_RE = /^\d{1,4}px$/; //       width/height, px form, 20-4000
 const OPACITY_RE = /^\d{1,3}$/; //         opacity, bare 0-100
 const ROTATE_RE = /^-?\d{1,3}$/; //        rotate, signed degrees
 const SCALE_RE = /^\d{1,3}$/; //           scale, bare 10-300 (%)
@@ -194,7 +196,10 @@ export function cleanValue(prop: string, value: unknown): string | null {
         ? String(Math.min(999, Math.max(0, parseInt(v, 10))))
         : null;
     case "width":
-      return WIDTH_PCT_RE.test(v) ? clampPct(v, 5, 100) : null;
+    case "height":
+      if (WIDTH_PCT_RE.test(v)) return clampPct(v, 5, 100);
+      if (SIZE_PX_RE.test(v)) return clampPx(v, 20, 4000);
+      return null;
     case "opacity":
       return OPACITY_RE.test(v)
         ? String(Math.min(100, Math.max(0, parseInt(v, 10))))

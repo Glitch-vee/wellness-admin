@@ -443,6 +443,13 @@ export default function BuilderPage() {
         beforeId?: string | null;
         span?: number;
         value?: string;
+        width?: string;
+        height?: string;
+        top?: string;
+        left?: string;
+        rotate?: string;
+        k?: string; // cms:block-key's pressed key — NOT `key` (that's the keyed-text field above)
+        shift?: boolean;
       };
       if (d?.type === "cms:block-focus" && d.id) {
         if (d.id === "hero") {
@@ -499,6 +506,104 @@ export default function BuilderPage() {
           return next;
         });
         showFlash({ text: "Width draft updated", tone: "ok" });
+      } else if (d?.type === "cms:block-freesize" && d.id) {
+        // Corner/edge free-resize (width/height/top/left, all px) — draft
+        // only, same as cms:block-resize above.
+        if (!cfg) return;
+        const id = d.id;
+        const block = blocksRef.current.find((r) => r.id === id);
+        if (!block) return;
+        const style = jsonOf(block, "style");
+        if (d.width !== undefined) style.width = d.width;
+        if (d.height !== undefined) style.height = d.height;
+        if (d.top !== undefined) style.top = d.top;
+        if (d.left !== undefined) style.left = d.left;
+        setBlocks((bs) => bs.map((b) => (b.id === id ? { ...b, style } : b)));
+        if (id === selectedRef.current)
+          setDraft((cur) => (cur ? { ...cur, style } : cur));
+        setDirtyBlockIds((prev) => {
+          const next = new Set(prev);
+          next.add(id);
+          return next;
+        });
+        showFlash({ text: "Size draft updated", tone: "ok" });
+      } else if (d?.type === "cms:block-rotate" && d.id) {
+        if (!cfg) return;
+        const id = d.id;
+        const block = blocksRef.current.find((r) => r.id === id);
+        if (!block) return;
+        const style = jsonOf(block, "style");
+        style.rotate = d.rotate;
+        setBlocks((bs) => bs.map((b) => (b.id === id ? { ...b, style } : b)));
+        if (id === selectedRef.current)
+          setDraft((cur) => (cur ? { ...cur, style } : cur));
+        setDirtyBlockIds((prev) => {
+          const next = new Set(prev);
+          next.add(id);
+          return next;
+        });
+        showFlash({ text: "Rotation draft updated", tone: "ok" });
+      } else if (d?.type === "cms:block-move" && d.id) {
+        // Free drag-to-move for an overlay block — top/left, px.
+        if (!cfg) return;
+        const id = d.id;
+        const block = blocksRef.current.find((r) => r.id === id);
+        if (!block) return;
+        const style = jsonOf(block, "style");
+        style.top = d.top;
+        style.left = d.left;
+        setBlocks((bs) => bs.map((b) => (b.id === id ? { ...b, style } : b)));
+        if (id === selectedRef.current)
+          setDraft((cur) => (cur ? { ...cur, style } : cur));
+        setDirtyBlockIds((prev) => {
+          const next = new Set(prev);
+          next.add(id);
+          return next;
+        });
+        showFlash({ text: "Position draft updated", tone: "ok" });
+      } else if (d?.type === "cms:block-key" && d.id) {
+        // Keyboard nudge, forwarded from the preview (it owns keyboard focus
+        // inside its own iframe — see PreviewBridge.tsx's onKeyDown). Only
+        // the currently selected block can be nudged.
+        const id = d.id;
+        if (id !== selectedRef.current) return;
+        const block = blocksRef.current.find((r) => r.id === id);
+        if (!block) return;
+        const style = draftRef.current?.style ?? {};
+        const overlay = style.position === "overlay";
+        const step = d.shift ? 10 : 1;
+        if (d.k === "[" || d.k === "]") {
+          const cur = Number(style.z ?? 0) || 0;
+          const z = d.shift
+            ? d.k === "]"
+              ? 999
+              : 0
+            : Math.min(999, Math.max(0, cur + (d.k === "]" ? 1 : -1)));
+          patchBlockStyleRef.current({ z: String(z) });
+        } else if (overlay && (d.k === "ArrowUp" || d.k === "ArrowDown")) {
+          const cur = Number.parseInt(String(style.top ?? "0"), 10) || 0;
+          patchBlockStyleRef.current({
+            top: `${cur + (d.k === "ArrowDown" ? step : -step)}px`,
+          });
+        } else if (overlay && (d.k === "ArrowLeft" || d.k === "ArrowRight")) {
+          const cur = Number.parseInt(String(style.left ?? "0"), 10) || 0;
+          patchBlockStyleRef.current({
+            left: `${cur + (d.k === "ArrowRight" ? step : -step)}px`,
+          });
+        } else if (!overlay && (d.k === "ArrowUp" || d.k === "ArrowDown")) {
+          // Overlay blocks are out of flow — reordering has no visual
+          // effect, so only non-overlay blocks alias the rail's up/down.
+          const dir = d.k === "ArrowDown" ? 1 : -1;
+          const { top, childrenOf } = buildTree(blocksRef.current);
+          const pid = parentIdOf(block);
+          if (pid) {
+            const idx = (childrenOf.get(pid) ?? []).findIndex((k) => k.id === id);
+            if (idx >= 0) moveChildRef.current(pid, idx, dir as -1 | 1);
+          } else {
+            const idx = top.findIndex((t) => t.id === id);
+            if (idx >= 0) moveTopRef.current(idx, dir as -1 | 1);
+          }
+        }
       } else if (d?.type === "cms:focus" && d.key) {
         // Keyed text clicked in the preview — open TextPop over it.
         if (!textRowsRef.current.some((r) => r.key === d.key)) return;
@@ -683,6 +788,10 @@ export default function BuilderPage() {
     },
     [post]
   );
+  // Reached from the ONE message listener above via a ref — same
+  // temporal-dead-zone dodge as applyOrderRef/sendSectionRef.
+  const patchBlockStyleRef = useRef(patchBlockStyle);
+  patchBlockStyleRef.current = patchBlockStyle;
 
   /** Esc in the toolbar: drop the unsaved style, live-revert to what's saved. */
   const revertBlockStyle = useCallback(() => {
@@ -812,6 +921,8 @@ export default function BuilderPage() {
     },
     [applyTree]
   );
+  const moveTopRef = useRef(moveTop);
+  moveTopRef.current = moveTop;
 
   /** Move a child card among its siblings inside the same row only. */
   const moveChild = useCallback(
@@ -826,6 +937,8 @@ export default function BuilderPage() {
     },
     [applyTree]
   );
+  const moveChildRef = useRef(moveChild);
+  moveChildRef.current = moveChild;
 
   /** Warn + reload when a parent_id write couldn't stick (pre-migration). */
   const nestingBlocked = useCallback(

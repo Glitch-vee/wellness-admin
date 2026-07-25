@@ -1106,6 +1106,52 @@ export function StylePanel({
       />
     </div>
   );
+  /** Bring to front / send to back / step one layer — nudges the block's OWN
+   * z rather than reading sibling values (no plumbing needed for that, and
+   * DOM order already breaks ties for same-z siblings in practice). */
+  const bumpZ = (dir: -1 | 1) => {
+    const cur = Number(val("z")) || 0;
+    onPatch({ z: String(Math.min(999, Math.max(0, cur + dir))) });
+  };
+  const layerButtons = () => (
+    <div className="field bkstyle__field bkstyle__field--wide">
+      <label>Layer order</label>
+      <div className="bkstyle__row" style={{ gap: 4 }}>
+        <button
+          type="button"
+          className="btn btn--sm"
+          title="Send to back"
+          onClick={() => onPatch({ z: "0" })}
+        >
+          ⏮
+        </button>
+        <button
+          type="button"
+          className="btn btn--sm"
+          title="Backward one"
+          onClick={() => bumpZ(-1)}
+        >
+          ◀
+        </button>
+        <button
+          type="button"
+          className="btn btn--sm"
+          title="Forward one"
+          onClick={() => bumpZ(1)}
+        >
+          ▶
+        </button>
+        <button
+          type="button"
+          className="btn btn--sm"
+          title="Bring to front"
+          onClick={() => onPatch({ z: "999" })}
+        >
+          ⏭
+        </button>
+      </div>
+    </div>
+  );
   const [hex, setHex] = useState(() =>
     isHexColor(style.color) ? String(style.color) : ""
   );
@@ -1416,6 +1462,7 @@ export function StylePanel({
               {offsetNum("Bottom", "bottom")}
             </div>
             {zField()}
+            {layerButtons()}
             <p className="hint">
               Overlay takes the block out of normal flow — set at least two of
               top/left/right/bottom or it collapses to the section&apos;s corner.
@@ -1428,6 +1475,7 @@ export function StylePanel({
               {offsetNum("Sticks at (top)", "top")}
               {zField()}
             </div>
+            {layerButtons()}
             <p className="hint">
               Sticky pins the block at this distance from the top of the
               viewport once you scroll past it. Left/right/bottom don&apos;t
