@@ -101,9 +101,11 @@ function layoutChips(row: Row): string[] {
   const l = layoutOf(row);
   const chips: string[] = [];
   const span = Number(l.span);
-  if (span === 4) chips.push("⅔");
+  if (span === 5) chips.push("⅚");
+  else if (span === 4) chips.push("⅔");
   else if (span === 3) chips.push("½");
   else if (span === 2) chips.push("⅓");
+  else if (span === 1) chips.push("⅙");
   if (l.align === "left") chips.push("←");
   else if (l.align === "center") chips.push("↔");
   else if (l.align === "right") chips.push("→");
@@ -502,8 +504,8 @@ export default function BuilderPage() {
         if (!block || parentIdOf(block) !== "") return;
         const span = Number(d.span);
         const layout = layoutOf(block);
-        // 6 (or anything invalid) → clear span for full width; 4/3/2 set it.
-        if (span === 4 || span === 3 || span === 2) layout.span = span;
+        // 6 (or anything invalid) → clear span for full width; 5/4/3/2/1 set it.
+        if (span >= 1 && span <= 5) layout.span = span;
         else delete layout.span;
         void (async () => {
           try {

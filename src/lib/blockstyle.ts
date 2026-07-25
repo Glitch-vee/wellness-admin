@@ -93,6 +93,15 @@ const STYLE_ENUMS: Record<string, string[]> = {
   paddingSm: STYLE_PADDINGS,
   marginTopSm: STYLE_MARGINS,
   marginBottomSm: STYLE_MARGINS,
+  // Layering: hideOn/position are token-only; the offsets + z are free-value
+  // only (empty token list — see cleanValue's free-form switch below).
+  hideOn: ["mobile", "desktop"],
+  position: ["overlay"],
+  top: [],
+  left: [],
+  right: [],
+  bottom: [],
+  z: [],
 };
 
 /* ---------- free-value contract (mirrors the site engine EXACTLY) ---------- */
@@ -110,6 +119,8 @@ const PX4_RE = /^\d{2,4}px$/; //           maxWidth
 const RATIO_RE = /^\d(?:\.\d{1,2})?$/; //  lineHeight
 const LETTER_RE = /^(-?\d(?:\.\d{1,2})?)(em|px)$/; // letterSpacing
 const WEIGHT_RE = /^[1-9]00$/; //          any 100…900
+const OFFSET_RE = /^-?\d{1,4}px$/; //      top/left/right/bottom, signed
+const Z_RE = /^\d{1,4}$/; //               z-index, plain integer
 
 function clampPx(v: string, min: number, max: number): string {
   return `${Math.min(max, Math.max(min, parseInt(v, 10)))}px`;
@@ -152,6 +163,15 @@ export function cleanValue(prop: string, value: unknown): string | null {
       return PX4_RE.test(v) ? clampPx(v, 200, 1600) : null;
     case "weight":
       return WEIGHT_RE.test(v) ? v : null;
+    case "top":
+    case "left":
+    case "right":
+    case "bottom":
+      return OFFSET_RE.test(v) ? clampPx(v, -2000, 2000) : null;
+    case "z":
+      return Z_RE.test(v)
+        ? String(Math.min(999, Math.max(0, parseInt(v, 10))))
+        : null;
     case "lineHeight":
       return RATIO_RE.test(v)
         ? String(Math.min(3, Math.max(0.8, parseFloat(v))))
@@ -329,6 +349,13 @@ export const MAX_WIDTH_OPTIONS = options([
   ["medium", "Medium"],
   ["wide", "Wide"],
 ]);
+
+export const HIDE_ON_OPTIONS = options([
+  ["mobile", "Hide on mobile"],
+  ["desktop", "Hide on desktop"],
+]);
+
+export const POSITION_OPTIONS = options([["overlay", "Overlay (free position)"]]);
 
 /** The colour swatch row: token, its hex and a human label. */
 export const COLOR_SWATCHES: { value: string; hex: string; label: string }[] = [

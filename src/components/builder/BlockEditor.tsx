@@ -46,6 +46,8 @@ import {
   BORDER_OPTIONS,
   SHADOW_OPTIONS,
   MAX_WIDTH_OPTIONS,
+  HIDE_ON_OPTIONS,
+  POSITION_OPTIONS,
   type StyleOption,
 } from "@/lib/blockstyle";
 
@@ -894,9 +896,11 @@ export default function BlockEditor({
               }
             >
               <option value="">Full width</option>
+              <option value="5">Five sixths</option>
               <option value="4">Two thirds</option>
               <option value="3">Half</option>
               <option value="2">One third</option>
+              <option value="1">One sixth</option>
             </select>
           </div>
           <div className="field">
@@ -999,6 +1003,27 @@ export function StylePanel({
 }) {
   const val = (prop: string) =>
     typeof style[prop] === "string" ? String(style[prop]) : "";
+
+  /** A signed px field for overlay offsets — freeNum assumes an unsigned
+   * token+unit pair, which doesn't fit top/left/right/bottom's negative range. */
+  const offsetNum = (label: string, prop: string) => {
+    const m = /^(-?\d{1,4})px$/.exec(val(prop));
+    return (
+      <div className="field bkstyle__field">
+        <label>{label}</label>
+        <input
+          className="bkstyle__num"
+          type="number"
+          placeholder="±px"
+          value={m ? m[1] : ""}
+          onChange={(e) => {
+            const raw = e.target.value.trim();
+            onPatch({ [prop]: raw === "" ? null : `${raw}px` });
+          }}
+        />
+      </div>
+    );
+  };
   const [hex, setHex] = useState(() =>
     isHexColor(style.color) ? String(style.color) : ""
   );
@@ -1208,6 +1233,45 @@ export function StylePanel({
           {freeNum("Space below", "marginBottomSm", MARGIN_OPTIONS, "px", "px")}
         </div>
         <p className="hint">Overrides the values above only on phones. Leave blank to inherit.</p>
+      </fieldset>
+
+      <fieldset className="bkstyle__group">
+        <legend>Position</legend>
+        <div className="bkstyle__row">
+          {sel("Visibility", "hideOn", HIDE_ON_OPTIONS)}
+          {sel("Layout mode", "position", POSITION_OPTIONS)}
+        </div>
+        {val("position") === "overlay" && (
+          <>
+            <div className="bkstyle__row">
+              {offsetNum("Top", "top")}
+              {offsetNum("Left", "left")}
+            </div>
+            <div className="bkstyle__row">
+              {offsetNum("Right", "right")}
+              {offsetNum("Bottom", "bottom")}
+            </div>
+            <div className="field bkstyle__field">
+              <label>Stack order (z)</label>
+              <input
+                className="bkstyle__num"
+                type="number"
+                min={0}
+                max={999}
+                placeholder="0-999"
+                value={val("z")}
+                onChange={(e) => {
+                  const raw = e.target.value.trim();
+                  onPatch({ z: raw === "" ? null : raw });
+                }}
+              />
+            </div>
+            <p className="hint">
+              Overlay takes the block out of normal flow — set at least two of
+              top/left/right/bottom or it collapses to the section&apos;s corner.
+            </p>
+          </>
+        )}
       </fieldset>
 
       <p className="bkedit__note">
