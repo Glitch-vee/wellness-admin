@@ -96,7 +96,7 @@ const STYLE_ENUMS: Record<string, string[]> = {
   // Layering: hideOn/position are token-only; the offsets + z are free-value
   // only (empty token list — see cleanValue's free-form switch below).
   hideOn: ["mobile", "desktop"],
-  position: ["overlay"],
+  position: ["overlay", "sticky"],
   top: [],
   left: [],
   right: [],
@@ -355,7 +355,10 @@ export const HIDE_ON_OPTIONS = options([
   ["desktop", "Hide on desktop"],
 ]);
 
-export const POSITION_OPTIONS = options([["overlay", "Overlay (free position)"]]);
+export const POSITION_OPTIONS = options([
+  ["overlay", "Overlay (free position)"],
+  ["sticky", "Sticky (pins on scroll)"],
+]);
 
 /** The colour swatch row: token, its hex and a human label. */
 export const COLOR_SWATCHES: { value: string; hex: string; label: string }[] = [

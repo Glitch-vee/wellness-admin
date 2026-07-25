@@ -1024,6 +1024,25 @@ export function StylePanel({
       </div>
     );
   };
+
+  /** Stack order — shared by overlay and sticky. */
+  const zField = () => (
+    <div className="field bkstyle__field">
+      <label>Stack order (z)</label>
+      <input
+        className="bkstyle__num"
+        type="number"
+        min={0}
+        max={999}
+        placeholder="0-999"
+        value={val("z")}
+        onChange={(e) => {
+          const raw = e.target.value.trim();
+          onPatch({ z: raw === "" ? null : raw });
+        }}
+      />
+    </div>
+  );
   const [hex, setHex] = useState(() =>
     isHexColor(style.color) ? String(style.color) : ""
   );
@@ -1251,24 +1270,23 @@ export function StylePanel({
               {offsetNum("Right", "right")}
               {offsetNum("Bottom", "bottom")}
             </div>
-            <div className="field bkstyle__field">
-              <label>Stack order (z)</label>
-              <input
-                className="bkstyle__num"
-                type="number"
-                min={0}
-                max={999}
-                placeholder="0-999"
-                value={val("z")}
-                onChange={(e) => {
-                  const raw = e.target.value.trim();
-                  onPatch({ z: raw === "" ? null : raw });
-                }}
-              />
-            </div>
+            {zField()}
             <p className="hint">
               Overlay takes the block out of normal flow — set at least two of
               top/left/right/bottom or it collapses to the section&apos;s corner.
+            </p>
+          </>
+        )}
+        {val("position") === "sticky" && (
+          <>
+            <div className="bkstyle__row">
+              {offsetNum("Sticks at (top)", "top")}
+              {zField()}
+            </div>
+            <p className="hint">
+              Sticky pins the block at this distance from the top of the
+              viewport once you scroll past it. Left/right/bottom don&apos;t
+              apply — the block keeps its normal-flow width and side.
             </p>
           </>
         )}
