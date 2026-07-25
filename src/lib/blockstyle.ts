@@ -88,6 +88,11 @@ const STYLE_ENUMS: Record<string, string[]> = {
   border: STYLE_BORDERS,
   shadow: STYLE_SHADOWS,
   maxWidth: STYLE_MAX_WIDTHS,
+  // Phone (<=700px) overrides — same token set as their base prop.
+  sizeSm: Object.keys(STYLE_SIZE_PX),
+  paddingSm: STYLE_PADDINGS,
+  marginTopSm: STYLE_MARGINS,
+  marginBottomSm: STYLE_MARGINS,
 };
 
 /* ---------- free-value contract (mirrors the site engine EXACTLY) ---------- */
@@ -133,10 +138,14 @@ export function cleanValue(prop: string, value: unknown): string | null {
   // Otherwise, the prop's free form — or nothing.
   switch (prop) {
     case "size":
+    case "sizeSm":
       return PX_RE.test(v) ? clampPx(v, 8, 200) : null;
     case "padding":
+    case "paddingSm":
     case "marginTop":
+    case "marginTopSm":
     case "marginBottom":
+    case "marginBottomSm":
     case "radius":
       return PX_RE.test(v) ? clampPx(v, 0, 200) : null;
     case "maxWidth":

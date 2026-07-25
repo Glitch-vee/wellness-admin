@@ -1197,6 +1197,19 @@ export function StylePanel({
         </div>
       </fieldset>
 
+      <fieldset className="bkstyle__group">
+        <legend>Phone (≤700px)</legend>
+        <div className="bkstyle__row">
+          {freeNum("Size", "sizeSm", SIZE_OPTIONS, "px", "px")}
+          {freeNum("Padding", "paddingSm", PADDING_OPTIONS, "px", "px")}
+        </div>
+        <div className="bkstyle__row">
+          {freeNum("Space above", "marginTopSm", MARGIN_OPTIONS, "px", "px")}
+          {freeNum("Space below", "marginBottomSm", MARGIN_OPTIONS, "px", "px")}
+        </div>
+        <p className="hint">Overrides the values above only on phones. Leave blank to inherit.</p>
+      </fieldset>
+
       <p className="bkedit__note">
         Every control starts at “Default”, which uses the site&apos;s own
         design — pick a value only where you want to override it.
