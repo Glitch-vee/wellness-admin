@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { api } from "@/lib/api";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { api, saveMsg, type Publish } from "@/lib/api";
 
 type Img = {
   id: string;
@@ -24,6 +24,24 @@ export default function GalleryPage() {
   const [slot, setSlot] = useState("gallery");
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
+  const [flash, setFlash] = useState<{ text: string; tone: "ok" | "warn" } | null>(null);
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showFlash = useCallback((m: { text: string; tone: "ok" | "warn" }) => {
+    if (flashTimer.current) clearTimeout(flashTimer.current);
+    setFlash(m);
+    flashTimer.current = setTimeout(
+      () => setFlash(null),
+      m.tone === "warn" ? 6000 : 2400
+    );
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (flashTimer.current) clearTimeout(flashTimer.current);
+    },
+    []
+  );
 
   const load = useCallback(async () => {
     try {
@@ -49,16 +67,21 @@ export default function GalleryPage() {
       form.append("alt", alt);
       form.append("caption", caption);
       form.append("slot", slot);
-      await api("/api/gallery/upload", { method: "POST", body: form });
+      const d = await api<{ row: Img; publish?: Publish }>(
+        "/api/gallery/upload",
+        { method: "POST", body: form }
+      );
       setFile(null);
       setAlt("");
       setCaption("");
       setSlot("gallery");
       (document.getElementById("gal-file") as HTMLInputElement).value = "";
       await load();
-      setMsg("✅ Uploaded & publishing to the live site.");
+      showFlash(saveMsg(d.publish));
     } catch (err) {
-      setMsg(`⚠️ ${err instanceof Error ? err.message : "Upload failed"}`);
+      setMsg(
+        `Couldn't save — nothing changed. ${err instanceof Error ? err.message : "Upload failed"}`
+      );
     } finally {
       setBusy(false);
     }
@@ -66,14 +89,17 @@ export default function GalleryPage() {
 
   const update = async (img: Img) => {
     setBusy(true);
+    setMsg("");
     try {
-      await api(`/api/table/gallery_images/${img.id}`, {
-        method: "PUT",
-        body: JSON.stringify(img),
-      });
-      setMsg("✅ Saved & publishing to the live site.");
+      const d = await api<{ row: Img; publish?: Publish }>(
+        `/api/table/gallery_images/${img.id}`,
+        { method: "PUT", body: JSON.stringify(img) }
+      );
+      showFlash(saveMsg(d.publish));
     } catch (e) {
-      setMsg(`⚠️ ${e instanceof Error ? e.message : "Save failed"}`);
+      setMsg(
+        `Couldn't save — nothing changed. ${e instanceof Error ? e.message : "Save failed"}`
+      );
     } finally {
       setBusy(false);
     }
@@ -82,12 +108,18 @@ export default function GalleryPage() {
   const remove = async (img: Img) => {
     if (!window.confirm("Delete this image? The file is removed too.")) return;
     setBusy(true);
+    setMsg("");
     try {
-      await api(`/api/table/gallery_images/${img.id}`, { method: "DELETE" });
+      const d = await api<{ ok: boolean; publish?: Publish }>(
+        `/api/table/gallery_images/${img.id}`,
+        { method: "DELETE" }
+      );
       await load();
-      setMsg("✅ Deleted & publishing to the live site.");
+      showFlash(saveMsg(d.publish));
     } catch (e) {
-      setMsg(`⚠️ ${e instanceof Error ? e.message : "Delete failed"}`);
+      setMsg(
+        `Couldn't save — nothing changed. ${e instanceof Error ? e.message : "Delete failed"}`
+      );
     } finally {
       setBusy(false);
     }
@@ -104,18 +136,18 @@ export default function GalleryPage() {
     <>
       <div className="page-head">
         <h1>Gallery</h1>
-        <p>
-          Photos appear on the site’s <strong>/gallery</strong> page. Each
-          image also gets a public URL — handy for lead magnets or anywhere
-          else. Max 4 MB per image (jpg, png, webp, gif, avif).
-        </p>
       </div>
 
-      {msg && <div className={`msg ${msg.startsWith("⚠️") ? "msg--err" : ""}`}>{msg}</div>}
+      {msg && <div className="msg msg--err">{msg}</div>}
+      {flash && (
+        <div className={`cms-flash ${flash.tone === "warn" ? "cms-flash--warn" : ""}`}>
+          {flash.text}
+        </div>
+      )}
 
       <form className="card" onSubmit={upload}>
         <div className="row-title">
-          <strong>Upload a new image</strong>
+          <strong>Upload</strong>
         </div>
         <div className="field">
           <label>Image file</label>
@@ -128,15 +160,15 @@ export default function GalleryPage() {
         </div>
         <div className="field-grid">
           <div className="field">
-            <label>Alt text (describe it)</label>
+            <label>Alt text</label>
             <input value={alt} onChange={(e) => setAlt(e.target.value)} />
           </div>
           <div className="field">
-            <label>Caption (shown under the photo)</label>
+            <label>Caption</label>
             <input value={caption} onChange={(e) => setCaption(e.target.value)} />
           </div>
           <div className="field">
-            <label>Where it shows</label>
+            <label>Shows on</label>
             <select value={slot} onChange={(e) => setSlot(e.target.value)}>
               {SLOTS.map((s) => (
                 <option key={s} value={s}>
@@ -144,10 +176,6 @@ export default function GalleryPage() {
                 </option>
               ))}
             </select>
-            <div className="hint">
-              gallery = /gallery wall · about = About page grid · before-after
-              = Results page proof section
-            </div>
           </div>
         </div>
         <div className="form-foot">

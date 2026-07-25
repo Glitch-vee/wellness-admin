@@ -1,0 +1,396 @@
+/* ============================================================
+   HUB + SITE MAP — styles for the Pages hub's new card variants
+   and the /sitemap board. Builds on globals.css tokens; nothing
+   here overrides an existing class.
+   ============================================================ */
+
+/* ---------- Pages hub: group header with a quiet trailing link ---------- */
+.hub-ghead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.hub-glink {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--muted);
+  transition: color 0.15s var(--ease-out);
+}
+
+.hub-glink:hover {
+  color: var(--green-dark);
+}
+
+/* ---------- generic wireframe strips (site pages — no block kinds) ---------- */
+.hub-strip--plain {
+  border-left-color: rgba(17, 17, 17, 0.16);
+}
+
+.hub-strip--plain em {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+/* the offer card's fixed pricing strip */
+.hub-strip--price {
+  border-left-color: rgba(92, 184, 0, 0.85);
+  background: rgba(92, 184, 0, 0.06);
+}
+
+/* ============================================================
+   SITE MAP (/sitemap) — a pan/zoom canvas with a top-down tree
+   ============================================================ */
+
+.sm-stage {
+  margin-top: 4px;
+}
+
+/* the canvas viewport: a fixed, screen-fitting window onto the tree */
+.sm-vp {
+  position: relative;
+  height: clamp(480px, calc(100vh - 288px), 900px);
+  border: 1px solid var(--hairline);
+  border-radius: 18px;
+  overflow: hidden;
+  background-color: var(--canvas);
+  /* faint dotted grid, like a design canvas */
+  background-image: radial-gradient(rgba(17, 17, 17, 0.06) 1px, transparent 1.4px);
+  background-size: 24px 24px;
+  background-position: 12px 12px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.sm-vp:active {
+  cursor: grabbing;
+}
+
+/* the transformed world: nodes are absolutely positioned inside it */
+.sm-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.sm-links {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+/* ---------- connections ---------- */
+/* hierarchy skeleton — the "main path" a visitor takes */
+.sm-wire {
+  fill: none;
+  stroke: rgba(46, 107, 0, 0.34);
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  transition: stroke 0.12s ease, stroke-width 0.12s ease;
+}
+
+.sm-wire--hot {
+  stroke: var(--green);
+  stroke-width: 2.6;
+}
+
+.sm-wire--broken {
+  stroke: var(--red);
+  stroke-dasharray: 5 5;
+}
+
+/* every other connection — faint until you hover an endpoint */
+.sm-thread {
+  fill: none;
+  stroke: rgba(17, 17, 17, 0.09);
+  stroke-width: 1.25;
+  transition: stroke 0.12s ease, stroke-width 0.12s ease;
+}
+
+.sm-thread--hot {
+  stroke: rgba(92, 184, 0, 0.85);
+  stroke-width: 1.9;
+}
+
+.sm-thread--broken {
+  stroke: rgba(204, 34, 0, 0.55);
+  stroke-dasharray: 4 4;
+}
+
+/* edge labels shown around the hovered card */
+.sm-elabel text {
+  font-size: 10.5px;
+  font-weight: 700;
+  fill: var(--body);
+  text-anchor: middle;
+  dominant-baseline: middle;
+  paint-order: stroke;
+  stroke: var(--canvas);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+
+/* ---------- node cards ---------- */
+.sm-node {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  text-align: left;
+  background: var(--white);
+  border: 1px solid var(--hairline);
+  border-radius: 14px;
+  padding: 11px 13px;
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+  transition: transform 0.14s var(--ease-out), box-shadow 0.14s var(--ease-out),
+    border-color 0.14s var(--ease-out), opacity 0.14s var(--ease-out);
+}
+
+/* top accent stripe by node kind */
+.sm-node::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 4px;
+  background: rgba(17, 17, 17, 0.18);
+}
+.sm-node--site::before {
+  background: linear-gradient(90deg, var(--green), var(--green-dark));
+}
+.sm-node--page::before {
+  background: #3b82f6;
+}
+.sm-node--offer::before {
+  background: var(--green);
+}
+.sm-node--external::before {
+  background: var(--muted);
+}
+.sm-node--missing::before {
+  background: var(--red);
+}
+
+.sm-node--external {
+  background: var(--canvas);
+}
+
+.sm-node--missing {
+  background: rgba(204, 34, 0, 0.04);
+  border: 1px dashed rgba(204, 34, 0, 0.45);
+}
+
+.sm-node--link {
+  cursor: pointer;
+}
+
+.sm-node--link:hover,
+.sm-node--hot {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-float);
+  border-color: rgba(92, 184, 0, 0.6);
+  z-index: 3;
+}
+
+.sm-node--off {
+  opacity: 0.6;
+}
+
+.sm-node--dim {
+  opacity: 0.32;
+}
+
+.sm-node__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin-top: 2px;
+}
+
+.sm-node__icon {
+  font-size: 15px;
+  flex: 0 0 auto;
+}
+
+.sm-node__title {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: var(--ink);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sm-node__path {
+  font-size: 11px;
+  color: var(--muted);
+  margin-left: 23px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sm-node__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: auto 0 0 23px;
+}
+
+.sm-chip {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  background: var(--canvas);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-pill);
+  padding: 1px 7px;
+  white-space: nowrap;
+}
+
+.sm-chip--io {
+  color: var(--body);
+}
+
+.sm-chip--warn {
+  color: var(--red);
+  background: rgba(204, 34, 0, 0.06);
+  border-color: rgba(204, 34, 0, 0.2);
+}
+
+/* ---------- floating zoom / fit toolbar ---------- */
+.sm-toolbar {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 7px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(6px);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-pill);
+  box-shadow: var(--shadow-float);
+}
+
+.sm-zbtn {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--ink);
+  background: var(--white);
+  border: 1px solid var(--hairline);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background 0.14s var(--ease-out), transform 0.14s var(--ease-out);
+}
+
+.sm-zbtn:hover {
+  background: var(--canvas);
+  transform: scale(1.06);
+}
+
+.sm-zval {
+  min-width: 40px;
+  text-align: center;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: var(--body);
+  font-variant-numeric: tabular-nums;
+}
+
+.sm-fit {
+  margin-left: 2px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--ink);
+  background: var(--white);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-pill);
+  cursor: pointer;
+  transition: background 0.14s var(--ease-out);
+}
+
+.sm-fit:hover {
+  background: var(--canvas);
+}
+
+/* ---------- legend ---------- */
+.sm-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  margin-top: 12px;
+  padding: 0 4px;
+  font-size: 12px;
+  color: var(--body);
+}
+
+.sm-legend__i {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.sm-sw {
+  width: 20px;
+  height: 0;
+  border-top-width: 2.5px;
+  border-top-style: solid;
+}
+
+.sm-sw--wire {
+  border-top-color: rgba(46, 107, 0, 0.55);
+}
+
+.sm-sw--thread {
+  border-top-color: rgba(17, 17, 17, 0.22);
+}
+
+.sm-sw--broken {
+  border-top-color: var(--red);
+  border-top-style: dashed;
+}
+
+.sm-legend__hint {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+/* ---------- stats strip ---------- */
+.sm-stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  color: var(--body);
+}
+
+.sm-stats strong {
+  color: var(--ink);
+}
+
+.sm-stats__dot {
+  color: var(--muted);
+}

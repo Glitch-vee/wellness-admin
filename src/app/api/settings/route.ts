@@ -24,12 +24,16 @@ export async function PUT(request: Request) {
   const client = sb();
   for (const row of body.rows) {
     if (!row.key) continue;
+    // Upsert (not update) so brand-new keys — e.g. the theme_* rows from the
+    // Page Style panel — self-create even if the seed migration hasn't run.
     const { error } = await client
       .from("site_settings")
-      .update({ value: String(row.value ?? ""), updated_at: new Date().toISOString() })
-      .eq("key", row.key);
+      .upsert(
+        { key: row.key, value: String(row.value ?? ""), updated_at: new Date().toISOString() },
+        { onConflict: "key" },
+      );
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  await publishSite();
-  return NextResponse.json({ ok: true });
+  const publish = await publishSite();
+  return NextResponse.json({ ok: true, publish });
 }

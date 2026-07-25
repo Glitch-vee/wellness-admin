@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { api } from "@/lib/api";
+import { api, saveMsg, type Publish } from "@/lib/api";
 import InlinePreview from "@/components/InlinePreview";
 import ImageField from "@/components/ImageField";
 
@@ -18,7 +18,7 @@ export default function SettingsPage() {
   const [rows, setRows] = useState<Setting[]>([]);
   const [editKey, setEditKey] = useState<string | null>(null);
   const [draft, setDraft] = useState<Record<string, string>>({});
-  const [savedKey, setSavedKey] = useState<string | null>(null);
+  const [flash, setFlash] = useState<{ text: string; tone: "ok" | "warn" } | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -34,10 +34,13 @@ export default function SettingsPage() {
 
   const get = (key: string) => rows.find((r) => r.key === key)?.value ?? "";
 
-  const flash = (key: string) => {
-    setSavedKey(key);
+  const showFlash = (m: { text: string; tone: "ok" | "warn" }) => {
+    setFlash(m);
     if (flashTimer.current) clearTimeout(flashTimer.current);
-    flashTimer.current = setTimeout(() => setSavedKey(null), 2000);
+    flashTimer.current = setTimeout(
+      () => setFlash(null),
+      m.tone === "warn" ? 6000 : 2400
+    );
   };
 
   /** PUT only the changed rows, mirror them into local state. */
@@ -45,7 +48,7 @@ export default function SettingsPage() {
     setBusy(true);
     setMsg("");
     try {
-      await api("/api/settings", {
+      const d = await api<{ ok: boolean; publish?: Publish }>("/api/settings", {
         method: "PUT",
         body: JSON.stringify({ rows: changed }),
       });
@@ -56,10 +59,12 @@ export default function SettingsPage() {
         })
       );
       setEditKey(null);
-      flash(changed[0].key);
+      showFlash(saveMsg(d.publish));
       return true;
     } catch (e) {
-      setMsg(`⚠️ ${e instanceof Error ? e.message : "Save failed"}`);
+      setMsg(
+        `Couldn't save — nothing changed. ${e instanceof Error ? e.message : "Save failed"}`
+      );
       return false;
     } finally {
       setBusy(false);
@@ -88,30 +93,83 @@ export default function SettingsPage() {
     <>
       <div className="page-head">
         <h1>Site Settings</h1>
-        <p>
-          Click a row to change it — each save publishes to the live site on
-          its own.
-        </p>
       </div>
 
       {msg && <div className="msg msg--err">{msg}</div>}
+      {flash && (
+        <div className={`cms-flash ${flash.tone === "warn" ? "cms-flash--warn" : ""}`}>
+          {flash.text}
+        </div>
+      )}
 
       {/* ------- Your photo ------- */}
       <div className="card">
         <div className="row-title">
           <strong>Your Photo</strong>
-          {savedKey === "portrait_url" && (
-            <span className="erow__saved">✓ Saved</span>
-          )}
         </div>
         <ImageField
           label="Portrait"
           value={get("portrait_url")}
           onChange={(url) => saveRows([{ key: "portrait_url", value: url }])}
         />
-        <div className="hint" style={{ marginTop: 8 }}>
-          This photo appears in the hero, the nav corner and the About page.
-          A square-ish shot works best.
+      </div>
+
+      {/* ------- Hero video ------- */}
+      <div className="card">
+        <div className="row-title" style={{ marginBottom: 6 }}>
+          <strong>Video Intro</strong>
+        </div>
+        <div className={`erow ${editKey === "hero_video_url" ? "erow--open" : ""}`}>
+          {editKey !== "hero_video_url" ? (
+            <button
+              type="button"
+              className="erow__line"
+              onClick={() => startEdit(["hero_video_url"], "hero_video_url")}
+            >
+              <span className="erow__label">
+                <span aria-hidden style={{ marginRight: 6 }}>🎥</span>
+                Video link
+              </span>
+              <span className="preview">
+                {get("hero_video_url") || <em>not set</em>}
+              </span>
+            </button>
+          ) : (
+            <div className="erow__edit">
+              <span className="erow__label">
+                <span aria-hidden style={{ marginRight: 6 }}>🎥</span>
+                Video link
+              </span>
+              <input
+                autoFocus
+                placeholder="https://youtu.be/... or https://vimeo.com/..."
+                value={draft.hero_video_url ?? ""}
+                onChange={(e) =>
+                  setDraft((d) => ({ ...d, hero_video_url: e.target.value }))
+                }
+              />
+              <div className="form-foot" style={{ marginTop: 10 }}>
+                <button
+                  className="btn btn--sm btn--green"
+                  disabled={busy}
+                  onClick={() =>
+                    saveRows([
+                      { key: "hero_video_url", value: draft.hero_video_url ?? "" },
+                    ])
+                  }
+                >
+                  {busy ? "Saving…" : "Save"}
+                </button>
+                <button
+                  className="btn btn--sm"
+                  disabled={busy}
+                  onClick={() => setEditKey(null)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -139,9 +197,6 @@ export default function SettingsPage() {
                   <span className="preview">
                     {row.value || <em>not set</em>}
                   </span>
-                  {savedKey === key && (
-                    <span className="erow__saved">✓ Saved</span>
-                  )}
                 </button>
               ) : (
                 <div className="erow__edit">
@@ -185,9 +240,6 @@ export default function SettingsPage() {
       <div className="card">
         <div className="row-title" style={{ marginBottom: 10 }}>
           <strong>Stats</strong>
-          <span className="hint" style={{ margin: 0 }}>
-            The four proof numbers in the hero. <code>*text*</code> = green.
-          </span>
         </div>
         <div className="stat-grid">
           {[1, 2, 3, 4].map((n) => {
@@ -211,9 +263,6 @@ export default function SettingsPage() {
                       text={get(numKey)}
                     />
                     <span className="stat-mini__lbl">{get(lblKey)}</span>
-                    {savedKey === numKey && (
-                      <span className="erow__saved">✓ Saved</span>
-                    )}
                   </button>
                 ) : (
                   <div className="stat-mini__form">

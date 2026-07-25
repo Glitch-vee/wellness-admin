@@ -57,6 +57,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: insErr.message }, { status: 500 });
   }
 
-  await publishSite();
-  return NextResponse.json({ row });
+  const publish = await publishSite();
+  return NextResponse.json({ row, publish });
 }

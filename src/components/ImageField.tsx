@@ -8,6 +8,11 @@ import { api } from "@/lib/api";
  * a Remove action, and a tucked-away "paste URL instead" fallback.
  * onChange fires only with committed values (upload done / removed / URL applied).
  */
+/** Only render a thumbnail for things that actually are images. */
+function isImage(url: string): boolean {
+  return /\.(jpe?g|png|webp|gif|avif|svg)(\?|$)/i.test(url);
+}
+
 export default function ImageField({
   value,
   onChange,
@@ -48,9 +53,14 @@ export default function ImageField({
     <div className="imgfield">
       <label>{label}</label>
       <div className="imgfield__row">
-        {value ? (
+        {value && isImage(value) ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img className="imgfield__thumb" src={value} alt={label} />
+        ) : value ? (
+          // A pasted video/other link has no thumbnail to show.
+          <div className="imgfield__thumb imgfield__thumb--empty" aria-hidden>
+            🔗
+          </div>
         ) : (
           <div className="imgfield__thumb imgfield__thumb--empty" aria-hidden>
             🖼

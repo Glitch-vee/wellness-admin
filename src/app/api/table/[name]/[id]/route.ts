@@ -2,6 +2,24 @@ import { NextResponse } from "next/server";
 import { sb, TABLES, sanitizeRow } from "@/lib/db";
 import { publishSite } from "@/lib/publish";
 
+/**
+ * Is this pages row one of the built-in site pages? Pre-migration the
+ * `system` column doesn't exist — any query error means "no".
+ */
+async function isSystemPage(id: string): Promise<boolean> {
+  try {
+    const { data, error } = await sb()
+      .from("pages")
+      .select("system")
+      .eq("id", id)
+      .single();
+    if (error) return false;
+    return data?.system === true;
+  } catch {
+    return false;
+  }
+}
+
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ name: string; id: string }> }
@@ -18,6 +36,14 @@ export async function PUT(
   }
 
   const row = sanitizeRow(name, payload);
+
+  // System pages keep their address and menu wiring, whatever the client sent.
+  if (name === "pages" && (await isSystemPage(id))) {
+    delete row.slug;
+    delete row.nav;
+    delete row.nav_label;
+  }
+
   const { data, error } = await sb()
     .from(name)
     .update({ ...row, updated_at: new Date().toISOString() })
@@ -26,8 +52,8 @@ export async function PUT(
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  await publishSite();
-  return NextResponse.json({ row: data });
+  const publish = await publishSite();
+  return NextResponse.json({ row: data, publish });
 }
 
 export async function DELETE(
@@ -37,6 +63,14 @@ export async function DELETE(
   const { name, id } = await params;
   const spec = TABLES[name];
   if (!spec) return NextResponse.json({ error: "Unknown table" }, { status: 404 });
+
+  // The built-in site pages must always exist — refuse to delete them.
+  if (name === "pages" && (await isSystemPage(id))) {
+    return NextResponse.json(
+      { error: "System pages can't be deleted." },
+      { status: 409 }
+    );
+  }
 
   const client = sb();
 
@@ -58,6 +92,6 @@ export async function DELETE(
   const { error } = await client.from(name).delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  await publishSite();
-  return NextResponse.json({ ok: true });
+  const publish = await publishSite();
+  return NextResponse.json({ ok: true, publish });
 }

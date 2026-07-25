@@ -34,9 +34,32 @@ export async function POST(
   }
 
   const row = sanitizeRow(name, payload);
+
+  // The built-in site pages own these addresses — a custom page there would
+  // shadow the system page (and block its migration seed).
+  if (name === "pages" && RESERVED_SLUGS.has(String(row.slug ?? ""))) {
+    return NextResponse.json(
+      { error: "That address belongs to a built-in site page — pick another." },
+      { status: 409 }
+    );
+  }
+
   const { data, error } = await sb().from(name).insert(row).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  await publishSite();
-  return NextResponse.json({ row: data });
+  const publish = await publishSite();
+  return NextResponse.json({ row: data, publish });
 }
+
+const RESERVED_SLUGS = new Set([
+  "home",
+  "about",
+  "offers",
+  "results",
+  "how-it-works",
+  "gallery",
+  "resources",
+  "scorecard",
+  "privacy",
+  "terms",
+]);

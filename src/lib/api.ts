@@ -20,3 +20,23 @@ export async function api<T = unknown>(
   }
   return data as T;
 }
+
+/** Outcome of a publishSite() round-trip, echoed by every mutating route. */
+export type Publish = { ok: boolean; detail: string; at: string };
+
+/**
+ * The ONE save-toast vocabulary. A save is only fully good news when the
+ * live site also picked it up — otherwise the toast warns instead.
+ */
+export function saveMsg(publish?: Publish): {
+  text: string;
+  tone: "ok" | "warn";
+} {
+  if (publish && publish.ok === false) {
+    return {
+      text: "Saved — but the live site didn't update. Retry from Dashboard.",
+      tone: "warn",
+    };
+  }
+  return { text: "Saved · Live ✓", tone: "ok" };
+}
