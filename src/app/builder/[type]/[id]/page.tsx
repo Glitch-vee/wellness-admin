@@ -127,11 +127,16 @@ function isRowKind(row: Row): boolean {
 type Tree = { top: Row[]; childrenOf: Map<string, Row[]> };
 
 /**
- * Split the flat, sort-ordered block list into a one-level tree that mirrors
- * the site's builder: parent_id null → top level; a block whose parent is a
- * TOP-LEVEL row becomes that row's child. Anything else — an orphaned link, a
- * non-row parent, a row nested in a row — falls back to top level, so no block
- * is ever hidden from the admin. Order within each scope is by sort_order.
+ * Split the flat, sort-ordered block list into a one-level-of-MAP tree that
+ * mirrors the site's builder: parent_id null → top level; a block whose
+ * parent is a TOP-LEVEL row becomes that row's child — including another
+ * row, so you can nest one row inside another. Anything deeper — a block
+ * whose parent is itself a NESTED row — falls back to top level: this rail
+ * only tracks one level of childrenOf, so a nested row's own children show
+ * as flat cards rather than visually indented under it. They still save and
+ * render correctly (the site's blocktree.ts has no such limit); it's an
+ * admin-rail display simplification, not a data cap. Order within each scope
+ * is by sort_order.
  */
 function buildTree(list: Row[]): Tree {
   const sorted = [...list].sort(
@@ -145,7 +150,7 @@ function buildTree(list: Row[]): Tree {
   for (const b of sorted) {
     const pid = parentIdOf(b);
     const parent = pid ? byId.get(pid) : undefined;
-    if (parent && isTopRow(parent) && !isRowKind(b)) {
+    if (parent && isTopRow(parent)) {
       const arr = childrenOf.get(pid) ?? [];
       arr.push(b);
       childrenOf.set(pid, arr);
@@ -507,33 +512,25 @@ export default function BuilderPage() {
         applyOrderRef.current(flattenTree(pid ? top : scope, childrenOf));
       } else if (d?.type === "cms:block-resize" && d.id) {
         // Preview resize handle: set a TOP-LEVEL block's grid width. Row
-        // children size by their column, not span — ignore those.
+        // children size by their column, not span — ignore those. Draft
+        // only, like every other on-canvas edit — no write, no reload,
+        // until Save Changes.
         if (!cfg) return;
-        const block = blocksRef.current.find((r) => r.id === d.id);
+        const resizeId = d.id;
+        const block = blocksRef.current.find((r) => r.id === resizeId);
         if (!block || parentIdOf(block) !== "") return;
         const span = Number(d.span);
         const layout = layoutOf(block);
         // 6 (or anything invalid) → clear span for full width; 5/4/3/2/1 set it.
         if (span >= 1 && span <= 5) layout.span = span;
         else delete layout.span;
-        void (async () => {
-          try {
-            const { d: res, skipped } = await sendSectionRef.current(
-              `/api/table/${cfg.childTable}/${d.id}`,
-              "PUT",
-              { ...block, layout }
-            );
-            setBlocks((bs) => bs.map((b) => (b.id === d.id ? res.row : b)));
-            showFlash(pendingFlash(skipped) ?? saveMsg(res.publish));
-            bumpPreview(res.publish);
-          } catch (err) {
-            setMsg(
-              `Couldn't save — nothing changed. ${
-                err instanceof Error ? err.message : "Save failed"
-              }`
-            );
-          }
-        })();
+        setBlocks((bs) => bs.map((b) => (b.id === resizeId ? { ...b, layout } : b)));
+        setDirtyBlockIds((prev) => {
+          const next = new Set(prev);
+          next.add(resizeId);
+          return next;
+        });
+        showFlash({ text: "Width draft updated", tone: "ok" });
       } else if (d?.type === "cms:focus" && d.key) {
         // Keyed text clicked in the preview — open TextPop over it.
         if (!textRowsRef.current.some((r) => r.key === d.key)) return;
@@ -964,10 +961,14 @@ export default function BuilderPage() {
       try {
         // A row is copied WITH its children: clone the row first, then each
         // child re-parented to the new row (parent_id has on-delete-cascade,
-        // so the copies live and die with their new row).
+        // so the copies live and die with their new row). Read children
+        // straight off the flat list rather than buildTree's childrenOf —
+        // that map only tracks children of TOP-level rows, so a nested row's
+        // own kids wouldn't show up in it.
         if (isRowKind(block)) {
-          const { childrenOf } = buildTree(blocksRef.current);
-          const kids = childrenOf.get(block.id) ?? [];
+          const kids = blocksRef.current
+            .filter((b) => parentIdOf(b) === block.id)
+            .sort((a, b) => Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0));
           const { d: rowRes } = await sendSection(
             `/api/table/${cfg.childTable}`,
             "POST",
@@ -1909,12 +1910,24 @@ export default function BuilderPage() {
           // Rows already on a page keep rendering and stay editable.
           // Bands restyle the page wrapper — only pages compose that way.
           //
-          // Inside a row (paletteParent set) rows and bands are also excluded:
-          // a row can't nest a row, and a band restyles the whole page, not a
-          // column. sec-* never appear in the palette anyway.
+          // Inside a row (paletteParent set), bands are always excluded — a
+          // band restyles the whole page, not a column. Rows are excluded
+          // only when paletteParent is ITSELF already nested (its own
+          // parent_id points at a row): the renderer caps nesting at 2
+          // levels, so a 3rd would silently not render. One level of row-
+          // inside-row is fine. sec-* never appear in the palette anyway.
           exclude={
             paletteParent
-              ? ["row", "band", ...SEC_KINDS.map((k) => k.kind)]
+              ? [
+                  ...(parentIdOf(
+                    blocksRef.current.find((b) => b.id === paletteParent) ??
+                      ({} as Row)
+                  )
+                    ? ["row"]
+                    : []),
+                  "band",
+                  ...SEC_KINDS.map((k) => k.kind),
+                ]
               : cfg?.table === "pages"
                 ? undefined
                 : ["band"]
