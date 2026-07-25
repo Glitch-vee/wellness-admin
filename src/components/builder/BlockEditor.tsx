@@ -991,9 +991,11 @@ export default function BlockEditor({
 export function StylePanel({
   style,
   onPatch,
+  hideColors = false,
 }: {
   style: Record<string, unknown>;
   onPatch: (patch: Record<string, unknown>) => void;
+  hideColors?: boolean;
 }) {
   const val = (prop: string) =>
     typeof style[prop] === "string" ? String(style[prop]) : "";
@@ -1118,46 +1120,48 @@ export function StylePanel({
             Italic
           </label>
         </div>
-        <div className="field bkstyle__field bkstyle__field--wide">
-          <label>Colour</label>
-          <div className="bkstyle__swatches">
-            <button
-              type="button"
-              className={`bkstyle__swatch bkstyle__swatch--none ${
-                color === "" ? "bkstyle__swatch--on" : ""
-              }`}
-              title="Default colour"
-              onClick={() => {
-                setHex("");
-                onPatch({ color: null });
-              }}
-            >
-              ∅
-            </button>
-            {COLOR_SWATCHES.map((c) => (
+        {!hideColors && (
+          <div className="field bkstyle__field bkstyle__field--wide">
+            <label>Colour</label>
+            <div className="bkstyle__swatches">
               <button
-                key={c.value}
                 type="button"
-                className={`bkstyle__swatch ${
-                  color === c.value ? "bkstyle__swatch--on" : ""
+                className={`bkstyle__swatch bkstyle__swatch--none ${
+                  color === "" ? "bkstyle__swatch--on" : ""
                 }`}
-                style={{ background: c.hex }}
-                title={c.label}
+                title="Default colour"
                 onClick={() => {
                   setHex("");
-                  onPatch({ color: c.value });
+                  onPatch({ color: null });
                 }}
+              >
+                ∅
+              </button>
+              {COLOR_SWATCHES.map((c) => (
+                <button
+                  key={c.value}
+                  type="button"
+                  className={`bkstyle__swatch ${
+                    color === c.value ? "bkstyle__swatch--on" : ""
+                  }`}
+                  style={{ background: c.hex }}
+                  title={c.label}
+                  onClick={() => {
+                    setHex("");
+                    onPatch({ color: c.value });
+                  }}
+                />
+              ))}
+              <input
+                className="bkstyle__hex"
+                value={hex}
+                placeholder="#hex"
+                spellCheck={false}
+                onChange={(e) => onHex("color", e.target.value, setHex)}
               />
-            ))}
-            <input
-              className="bkstyle__hex"
-              value={hex}
-              placeholder="#hex"
-              spellCheck={false}
-              onChange={(e) => onHex("color", e.target.value, setHex)}
-            />
+            </div>
           </div>
-        </div>
+        )}
       </fieldset>
 
       <fieldset className="bkstyle__group">
