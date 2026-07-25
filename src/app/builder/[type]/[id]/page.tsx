@@ -450,6 +450,23 @@ export default function BuilderPage() {
         rotate?: string;
         k?: string; // cms:block-key's pressed key — NOT `key` (that's the keyed-text field above)
         shift?: boolean;
+        action?: "front" | "back" | "forward" | "backward"; // cms:block-layer
+        draggedId?: string; // cms:block-relayout
+        targetId?: string;
+        side?: "left" | "right";
+      };
+      /** Shared z-nudge for cms:block-key's [ / ] and the on-canvas layer
+       * buttons — only ever acts on the currently selected block. */
+      const nudgeLayer = (action: "front" | "back" | "forward" | "backward") => {
+        const style = draftRef.current?.style ?? {};
+        const cur = Number(style.z ?? 0) || 0;
+        const z =
+          action === "front"
+            ? 999
+            : action === "back"
+              ? 0
+              : Math.min(999, Math.max(0, cur + (action === "forward" ? 1 : -1)));
+        patchBlockStyleRef.current({ z: String(z) });
       };
       if (d?.type === "cms:block-focus" && d.id) {
         if (d.id === "hero") {
@@ -573,13 +590,8 @@ export default function BuilderPage() {
         const overlay = style.position === "overlay";
         const step = d.shift ? 10 : 1;
         if (d.k === "[" || d.k === "]") {
-          const cur = Number(style.z ?? 0) || 0;
-          const z = d.shift
-            ? d.k === "]"
-              ? 999
-              : 0
-            : Math.min(999, Math.max(0, cur + (d.k === "]" ? 1 : -1)));
-          patchBlockStyleRef.current({ z: String(z) });
+          const fwd = d.k === "]";
+          nudgeLayer(d.shift ? (fwd ? "front" : "back") : fwd ? "forward" : "backward");
         } else if (overlay && (d.k === "ArrowUp" || d.k === "ArrowDown")) {
           const cur = Number.parseInt(String(style.top ?? "0"), 10) || 0;
           patchBlockStyleRef.current({
@@ -604,6 +616,27 @@ export default function BuilderPage() {
             if (idx >= 0) moveTopRef.current(idx, dir as -1 | 1);
           }
         }
+      } else if (
+        d?.type === "cms:block-relayout" &&
+        d.draggedId &&
+        d.targetId &&
+        d.side
+      ) {
+        // Dropped block B beside block A's edge: A already in a row -> join
+        // it; otherwise wrap both into a brand-new row. Real DB writes (row
+        // creation can't be optimistic), reuses the exact moveInto/
+        // wrapIntoRow paths the rail's own row controls use.
+        if (!cfg) return;
+        const dragged = blocksRef.current.find((r) => r.id === d.draggedId);
+        const target = blocksRef.current.find((r) => r.id === d.targetId);
+        if (!dragged || !target) return;
+        const targetParent = parentIdOf(target);
+        if (targetParent) void moveIntoRef.current(dragged, targetParent);
+        else void wrapIntoRowRef.current(target, dragged, d.side);
+      } else if (d?.type === "cms:block-layer" && d.id && d.action) {
+        // On-canvas layer buttons — same constraint as cms:block-key.
+        if (d.id !== selectedRef.current) return;
+        nudgeLayer(d.action);
       } else if (d?.type === "cms:focus" && d.key) {
         // Keyed text clicked in the preview — open TextPop over it.
         if (!textRowsRef.current.some((r) => r.key === d.key)) return;
@@ -1015,6 +1048,49 @@ export default function BuilderPage() {
     },
     [cfg, sendSection, nestingBlocked, applyTree, showFlash]
   );
+  const moveIntoRef = useRef(moveInto);
+  moveIntoRef.current = moveInto;
+
+  /** Wrap two top-level blocks into a brand-new row, side by side — the
+   * drag-to-relayout counterpart of moveInto (for when the drop target
+   * isn't already in a row). Reuses moveInto twice to place both children
+   * in the right order once the row itself exists. */
+  const wrapIntoRow = useCallback(
+    async (target: Row, dragged: Row, side: "left" | "right") => {
+      if (!cfg) return;
+      setBusy(true);
+      setMsg("");
+      try {
+        const { d } = await sendSection(`/api/table/${cfg.childTable}`, "POST", {
+          [cfg.fk]: parentId,
+          kind: "row",
+          heading: "",
+          body: "",
+          media_url: "",
+          layout: {},
+          style: {},
+          props: { columns: 2 },
+          sort_order: Number(target.sort_order ?? 0),
+          active: true,
+        });
+        const rowId = d.row.id;
+        const first = side === "left" ? dragged : target;
+        const second = side === "left" ? target : dragged;
+        await moveInto(first, rowId);
+        await moveInto(second, rowId);
+        showFlash({ text: "Arranged into a Columns block", tone: "ok" });
+      } catch (e) {
+        setMsg(
+          `Couldn't save — nothing changed. ${e instanceof Error ? e.message : "Group failed"}`
+        );
+      } finally {
+        setBusy(false);
+      }
+    },
+    [cfg, parentId, sendSection, moveInto, showFlash]
+  );
+  const wrapIntoRowRef = useRef(wrapIntoRow);
+  wrapIntoRowRef.current = wrapIntoRow;
 
   /** The POST body that clones one block's content into a fresh row. */
   const copyPayload = useCallback(
