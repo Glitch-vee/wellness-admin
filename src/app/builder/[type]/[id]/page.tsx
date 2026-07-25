@@ -1858,8 +1858,16 @@ export default function BuilderPage() {
         onDone={saveBlock}
         onRevert={revertBlockStyle}
         onEditText={() => {
+          // No keyed text on-canvas for this block (generic content block) —
+          // the real editor is its Text field in the rail. Open it there
+          // instead of posting a request the preview can't answer.
           if (selected) {
-            post({ type: "cms:text-edit-request", id: selected });
+            setRailOpen(true);
+            requestAnimationFrame(() => {
+              cardRefs.current
+                .get(selected)
+                ?.scrollIntoView({ behavior: "smooth", block: "center" });
+            });
           }
         }}
       />
