@@ -20,6 +20,9 @@ import TextPop, {
 import BlockStylePop, {
   type BlockStylePopHandle,
 } from "@/components/builder/BlockStylePop";
+import MediaPop, {
+  type MediaPopHandle,
+} from "@/components/builder/MediaPop";
 import FieldInput from "@/components/FieldInput";
 import InlinePreview from "@/components/InlinePreview";
 
@@ -242,6 +245,10 @@ export default function BuilderPage() {
   // Keyed page text (content_blocks) — powers the site rail and TextPop.
   const [textRows, setTextRows] = useState<TextRow[]>([]);
   const [activeTextKey, setActiveTextKey] = useState<string | null>(null);
+  const [railOpen, setRailOpen] = useState(false);
+  const [activeMediaId, setActiveMediaId] = useState<string | null>(null);
+  const [activeMediaKind, setActiveMediaKind] = useState<string | null>(null);
+  const [activeMediaUrl, setActiveMediaUrl] = useState("");
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -250,6 +257,7 @@ export default function BuilderPage() {
   const textCardRefs = useRef(new Map<string, HTMLDivElement>());
   const textPopRef = useRef<TextPopHandle>(null);
   const blockPopRef = useRef<BlockStylePopHandle>(null);
+  const mediaPopRef = useRef<MediaPopHandle>(null);
   const selectedRef = useRef<string | null>(null);
   const dirtyRef = useRef(false);
   const textRowsRef = useRef<TextRow[]>([]);
@@ -279,8 +287,8 @@ export default function BuilderPage() {
    */
   const bumpPreview = useCallback((publish?: Publish) => {
     if (publish?.ok === false) return;
-    setNonce((n) => n + 1);
-  }, []);
+    post({ type: "cms:reload" });
+  }, [post]);
 
   const load = useCallback(async () => {
     if (!cfg) return;
@@ -353,11 +361,25 @@ export default function BuilderPage() {
       }
       setSelected(id);
       setDirty(false);
+
+      // Close media pop on switch or clear
+      setActiveMediaId(null);
+      setActiveMediaKind(null);
+      setActiveMediaUrl("");
+
       if (id) {
         const b = blocksRef.current.find((r) => r.id === id);
         setDraft(b ? draftOf(b) : null);
         post({ type: "cms:block-active", id });
         if (opts?.locate !== false) post({ type: "cms:block-locate", id });
+
+        // If selecting image/video from rail, open MediaPop
+        if (b && (b.kind === "image" || b.kind === "video")) {
+          setActiveMediaId(b.id);
+          setActiveMediaKind(b.kind);
+          setActiveMediaUrl(String(b.media_url ?? ""));
+        }
+
         // Bring the card into view in the rail.
         requestAnimationFrame(() => {
           cardRefs.current
@@ -412,6 +434,7 @@ export default function BuilderPage() {
         rect?: Rect;
         beforeId?: string | null;
         span?: number;
+        value?: string;
       };
       if (d?.type === "cms:block-focus" && d.id) {
         if (d.id === "hero") {
@@ -422,8 +445,28 @@ export default function BuilderPage() {
         // toolbar over it — anchor the pop with the rect that came along.
         if (d.rect) blockPopRef.current?.setRect(d.id, d.rect);
         selectBlock(d.id, { locate: false });
+
+        // Route media popup if kind is image or video
+        const block = blocksRef.current.find((b) => b.id === d.id);
+        if (block && (block.kind === "image" || block.kind === "video")) {
+          setActiveMediaId(block.id);
+          setActiveMediaKind(block.kind);
+          setActiveMediaUrl(String(block.media_url ?? ""));
+          if (d.rect) {
+            setTimeout(() => {
+              mediaPopRef.current?.setRect(d.id!, d.rect!);
+            }, 50);
+          }
+        } else {
+          setActiveMediaId(null);
+          setActiveMediaKind(null);
+          setActiveMediaUrl("");
+        }
       } else if (d?.type === "cms:block-rect" && d.id && d.rect) {
         blockPopRef.current?.setRect(d.id, d.rect);
+        if (d.id === selectedRef.current) {
+          mediaPopRef.current?.setRect(d.id, d.rect);
+        }
       } else if (d?.type === "cms:block-drop" && d.id) {
         // Preview drag-drop: slot a block immediately before a sibling in its
         // OWN scope (top level, or within one row), then persist the reflowed
@@ -482,6 +525,23 @@ export default function BuilderPage() {
         if (!textRowsRef.current.some((r) => r.key === d.key)) return;
         if (d.rect) textPopRef.current?.setRect(d.key, d.rect);
         openTextKey(d.key);
+      } else if (d?.type === "cms:text-change" && d.key && d.value !== undefined) {
+        setTextRows((rs) =>
+          rs.map((r) => (r.key === d.key ? { ...r, value: d.value! } : r))
+        );
+        void (async () => {
+          try {
+            await api("/api/blocks", {
+              method: "PUT",
+              body: JSON.stringify({
+                rows: [{ key: d.key, value: d.value }],
+              }),
+            });
+            showFlash({ text: "Saved inline", tone: "ok" });
+          } catch (e) {
+            console.error("Failed to save inline:", e);
+          }
+        })();
       } else if (d?.type === "cms:rect" && d.key && d.rect) {
         textPopRef.current?.setRect(d.key, d.rect);
       } else if (d?.type === "cms:ready") {
@@ -492,6 +552,7 @@ export default function BuilderPage() {
         }
         textPopRef.current?.notifyReady();
         blockPopRef.current?.notifyReady();
+        mediaPopRef.current?.notifyReady();
       }
     };
     window.addEventListener("message", onMessage);
@@ -538,6 +599,33 @@ export default function BuilderPage() {
     []
   );
 
+  const saveMediaUrl = useCallback(
+    async (id: string, url: string) => {
+      if (!cfg) return;
+      const block = blocks.find((b) => b.id === id);
+      if (!block) return;
+      setBusy(true);
+      setMsg("");
+      try {
+        const { d, skipped } = await sendSection(
+          `/api/table/${cfg.childTable}/${id}`,
+          "PUT",
+          { ...block, media_url: url }
+        );
+        setBlocks((bs) => bs.map((b) => (b.id === id ? d.row : b)));
+        showFlash(pendingFlash(skipped) ?? saveMsg(d.publish));
+        post({ type: "cms:block-media", id, url });
+      } catch (e) {
+        setMsg(
+          `Couldn't save — nothing changed. ${e instanceof Error ? e.message : "Save failed"}`
+        );
+      } finally {
+        setBusy(false);
+      }
+    },
+    [cfg, blocks, sendSection, showFlash, post]
+  );
+
   const saveBlock = useCallback(async () => {
     const id = selectedRef.current;
     if (!cfg || !id || !draft) return;
@@ -554,7 +642,6 @@ export default function BuilderPage() {
       setBlocks((bs) => bs.map((b) => (b.id === id ? d.row : b)));
       setDirty(false);
       showFlash(pendingFlash(skipped) ?? saveMsg(d.publish));
-      bumpPreview(d.publish);
     } catch (e) {
       setMsg(
         `Couldn't save — nothing changed. ${e instanceof Error ? e.message : "Save failed"}`
@@ -562,7 +649,7 @@ export default function BuilderPage() {
     } finally {
       setBusy(false);
     }
-  }, [cfg, draft, sendSection, showFlash, bumpPreview]);
+  }, [cfg, draft, sendSection, showFlash]);
 
   const cancelEdit = useCallback(() => {
     const id = selectedRef.current;
@@ -1431,7 +1518,7 @@ export default function BuilderPage() {
 
   return (
     <>
-      <div className="page-head builder-head">
+      <div className="page-head builder-head builder-head--slim">
         <div className="builder-head__left">
           <Link className="btn btn--sm" href={cfg ? cfg.backHref : "/pages"}>
             ← {cfg ? cfg.backLabel : "Pages"}
@@ -1447,6 +1534,14 @@ export default function BuilderPage() {
           {parent && parent.active === false && (
             <span className="chip chip--off">Hidden</span>
           )}
+          <button
+            type="button"
+            className={`btn btn--sm ${railOpen ? "btn--green" : ""}`}
+            style={{ marginLeft: 8 }}
+            onClick={() => setRailOpen((o) => !o)}
+          >
+            {railOpen ? "📁 Hide Blocks" : "📁 Show Blocks"}
+          </button>
         </div>
         <div className="row-actions">
           {!isSite && (
@@ -1506,7 +1601,7 @@ export default function BuilderPage() {
 
       <div className="builder">
         {/* ---------- block rail (or text rail on site pages) ---------- */}
-        <div className="builder__rail">
+        <div className={`builder__rail ${railOpen ? "" : "builder__rail--closed"}`}>
           {!isSite && (
             <p className="builder__railhint">
               Click any text in the preview to edit it — blocks below are the
@@ -1676,7 +1771,7 @@ export default function BuilderPage() {
           <div className="cms__frame-wrap">
             {previewSrc && (
               <iframe
-                key={nonce}
+                key={pagePath}
                 ref={iframeRef}
                 className="cms__frame builder__frame"
                 src={previewSrc}
@@ -1719,6 +1814,26 @@ export default function BuilderPage() {
         onPatch={patchBlockStyle}
         onDone={saveBlock}
         onRevert={revertBlockStyle}
+        onEditText={() => {
+          if (selected) {
+            post({ type: "cms:text-edit-request", id: selected });
+          }
+        }}
+      />
+
+      {/* Floating media editor for image/video blocks */}
+      <MediaPop
+        ref={mediaPopRef}
+        iframeRef={iframeRef}
+        activeId={activeMediaId}
+        activeKind={activeMediaKind}
+        initialUrl={activeMediaUrl}
+        onSave={saveMediaUrl}
+        onClose={() => {
+          setActiveMediaId(null);
+          setActiveMediaKind(null);
+          setActiveMediaUrl("");
+        }}
       />
 
       {palette && (
