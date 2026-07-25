@@ -1075,12 +1075,23 @@ textarea {
   }
 
   .side {
-    position: static;
-    height: auto;
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: center;
-    margin: 10px;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: min(280px, 82vw);
+    height: 100vh;
+    margin: 0;
+    border-radius: 0;
+    z-index: 1000;
+    transform: translateX(0);
+  }
+
+  .side--closed {
+    width: min(280px, 82vw) !important;
+    transform: translateX(-100%);
+    opacity: 1;
+    pointer-events: none;
+    overflow: hidden;
   }
 
   .side__brand {
@@ -1091,6 +1102,23 @@ textarea {
   .side__spacer,
   .side__foot {
     display: none;
+  }
+
+  .side-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(17, 17, 17, 0.4);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+    z-index: 900;
+  }
+
+  .side-toggle {
+    z-index: 1001;
+  }
+
+  .side-toggle--open {
+    left: min(280px, 82vw);
   }
 
   .field-grid {

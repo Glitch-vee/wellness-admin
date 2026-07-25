@@ -71,6 +71,25 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const [newLeads, setNewLeads] = useState(0);
   const onLogin = pathname === "/login";
   const [sideOpen, setSideOpen] = useState(() => !pathname.startsWith("/builder"));
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 820px)");
+    const apply = () => {
+      setIsMobile(mq.matches);
+      if (mq.matches) setSideOpen(false);
+    };
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+
+  useEffect(() => {
+    document.body.style.overflow = isMobile && sideOpen ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [isMobile, sideOpen]);
 
   // Leads badge: cheap count poll on mount + every minute; quiet on failure.
   useEffect(() => {
@@ -109,6 +128,9 @@ export default function Shell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="shell">
+      {isMobile && sideOpen && (
+        <div className="side-backdrop" onClick={() => setSideOpen(false)} />
+      )}
       <aside className={`side ${sideOpen ? "" : "side--closed"}`}>
         <div className="side__brand">
           <span className="side__dot">AA</span>
@@ -125,6 +147,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
                 key={n.href}
                 href={n.href}
                 className={`nav-item ${isOn(n.href, pathname) ? "on" : ""}`}
+                onClick={() => isMobile && setSideOpen(false)}
               >
                 {n.label}
                 {n.badge === "leads" && newLeads > 0 && (
