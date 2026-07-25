@@ -102,6 +102,7 @@ const STYLE_ENUMS: Record<string, string[]> = {
   right: [],
   bottom: [],
   z: [],
+  width: [],
 };
 
 /* ---------- free-value contract (mirrors the site engine EXACTLY) ---------- */
@@ -121,9 +122,14 @@ const LETTER_RE = /^(-?\d(?:\.\d{1,2})?)(em|px)$/; // letterSpacing
 const WEIGHT_RE = /^[1-9]00$/; //          any 100…900
 const OFFSET_RE = /^-?\d{1,4}px$/; //      top/left/right/bottom, signed
 const Z_RE = /^\d{1,4}$/; //               z-index, plain integer
+const WIDTH_PCT_RE = /^\d{1,3}%$/; //      width, bare percentage
 
 function clampPx(v: string, min: number, max: number): string {
   return `${Math.min(max, Math.max(min, parseInt(v, 10)))}px`;
+}
+
+function clampPct(v: string, min: number, max: number): string {
+  return `${Math.min(max, Math.max(min, parseInt(v, 10)))}%`;
 }
 
 /**
@@ -172,6 +178,8 @@ export function cleanValue(prop: string, value: unknown): string | null {
       return Z_RE.test(v)
         ? String(Math.min(999, Math.max(0, parseInt(v, 10))))
         : null;
+    case "width":
+      return WIDTH_PCT_RE.test(v) ? clampPct(v, 5, 100) : null;
     case "lineHeight":
       return RATIO_RE.test(v)
         ? String(Math.min(3, Math.max(0.8, parseFloat(v))))

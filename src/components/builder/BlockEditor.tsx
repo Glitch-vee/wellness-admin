@@ -786,6 +786,20 @@ export default function BlockEditor({
             </select>
           </div>
           <div className="field">
+            <label>Column ratios (optional)</label>
+            <input
+              type="text"
+              value={pStr("ratios")}
+              placeholder="e.g. 2,1 for 66/33"
+              onChange={(e) => setProps({ ratios: e.target.value || null })}
+            />
+            <span className="hint">
+              Comma-separated weights, one per column (must match the count
+              above) — e.g. "2,1" makes the first column twice as wide.
+              Leave blank for equal columns.
+            </span>
+          </div>
+          <div className="field">
             <label>Gap between columns</label>
             <select
               value={gap}
@@ -1025,6 +1039,29 @@ export function StylePanel({
     );
   };
 
+  /** A bare "N%" field — width doesn't fit freeNum's token+unit pairing
+   * (there's no token form, just a 5-100 range) any more than offsets do. */
+  const widthNum = () => {
+    const m = /^(\d{1,3})%$/.exec(val("width"));
+    return (
+      <div className="field bkstyle__field">
+        <label>Width %</label>
+        <input
+          className="bkstyle__num"
+          type="number"
+          min={5}
+          max={100}
+          placeholder="5-100"
+          value={m ? m[1] : ""}
+          onChange={(e) => {
+            const raw = e.target.value.trim();
+            onPatch({ width: raw === "" ? null : `${raw}%` });
+          }}
+        />
+      </div>
+    );
+  };
+
   /** Stack order — shared by overlay and sticky. */
   const zField = () => (
     <div className="field bkstyle__field">
@@ -1238,7 +1275,15 @@ export function StylePanel({
         </div>
         <div className="bkstyle__row">
           {freeNum("Max width", "maxWidth", MAX_WIDTH_OPTIONS, "px", "px")}
+          {widthNum()}
         </div>
+        {val("width") !== "" && (
+          <p className="hint">
+            Width % keeps the block&apos;s full grid row and narrows it inside —
+            set Align (Text section above) to center or right it, or it stays
+            flush left.
+          </p>
+        )}
       </fieldset>
 
       <fieldset className="bkstyle__group">
