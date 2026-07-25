@@ -604,23 +604,23 @@ export default function BuilderPage() {
       if (!cfg) return;
       const block = blocks.find((b) => b.id === id);
       if (!block) return;
-      setBusy(true);
-      setMsg("");
+
+      const updatedBlock = { ...block, media_url: url };
+      setBlocks((bs) => bs.map((b) => (b.id === id ? updatedBlock : b)));
+      post({ type: "cms:block-media", id, url });
+
       try {
         const { d, skipped } = await sendSection(
           `/api/table/${cfg.childTable}/${id}`,
           "PUT",
-          { ...block, media_url: url }
+          updatedBlock
         );
         setBlocks((bs) => bs.map((b) => (b.id === id ? d.row : b)));
         showFlash(pendingFlash(skipped) ?? saveMsg(d.publish));
-        post({ type: "cms:block-media", id, url });
       } catch (e) {
-        setMsg(
-          `Couldn't save — nothing changed. ${e instanceof Error ? e.message : "Save failed"}`
-        );
-      } finally {
-        setBusy(false);
+        setBlocks((bs) => bs.map((b) => (b.id === id ? block : b)));
+        post({ type: "cms:block-media", id, url: String(block.media_url ?? "") });
+        setMsg(`Failed to save media URL: ${e instanceof Error ? e.message : "Save failed"}`);
       }
     },
     [cfg, blocks, sendSection, showFlash, post]
@@ -631,23 +631,22 @@ export default function BuilderPage() {
     if (!cfg || !id || !draft) return;
     const block = blocksRef.current.find((b) => b.id === id);
     if (!block) return;
-    setBusy(true);
-    setMsg("");
+
+    const updatedBlock = { ...block, ...draft };
+    setBlocks((bs) => bs.map((b) => (b.id === id ? updatedBlock : b)));
+    setDirty(false);
+
     try {
       const { d, skipped } = await sendSection(
         `/api/table/${cfg.childTable}/${id}`,
         "PUT",
-        { ...block, ...draft }
+        updatedBlock
       );
       setBlocks((bs) => bs.map((b) => (b.id === id ? d.row : b)));
-      setDirty(false);
       showFlash(pendingFlash(skipped) ?? saveMsg(d.publish));
     } catch (e) {
-      setMsg(
-        `Couldn't save — nothing changed. ${e instanceof Error ? e.message : "Save failed"}`
-      );
-    } finally {
-      setBusy(false);
+      setBlocks((bs) => bs.map((b) => (b.id === id ? block : b)));
+      setMsg(`Failed to save block: ${e instanceof Error ? e.message : "Save failed"}`);
     }
   }, [cfg, draft, sendSection, showFlash]);
 

@@ -280,11 +280,17 @@ const TextPop = forwardRef<
     if (!key) return;
     const value = draftRef.current;
     const style = styleDirtyRef.current ? styleDraftRef.current : undefined;
-    setBusy(true);
-    setErr("");
-    setNote("");
+    
+    const row = rowsRef.current.find((r) => r.key === key);
+    const origValue = row ? row.value : "";
+    const origStyle = row?.style ? { ...row.style } : undefined;
+
+    // Close and update state immediately
+    onSaved(key, value, style, undefined);
+    close();
+
     try {
-      const d = await api<{
+      await api<{
         ok: boolean;
         publish?: Publish;
         styleSkipped?: boolean;
@@ -294,25 +300,12 @@ const TextPop = forwardRef<
           rows: [style ? { key, value, style } : { key, value }],
         }),
       });
-      if (d.styleSkipped) {
-        // The text landed; styling is waiting on the pending migration —
-        // put the live style back to what's actually saved and say so.
-        onSaved(key, value, undefined, d.publish);
-        const saved = rowsRef.current.find((r) => r.key === key);
-        post({ type: "cms:style", key, style: saved?.style ?? null });
-        setNote("Text saved. Styling needs the pending database update.");
-      } else {
-        onSaved(key, value, style, d.publish);
-        close();
-      }
     } catch (e) {
-      setErr(
-        `Couldn't save — nothing changed. ${e instanceof Error ? e.message : "Save failed"}`
-      );
-    } finally {
-      setBusy(false);
+      // Revert on error
+      onSaved(key, origValue, origStyle, undefined);
+      console.error("Optimistic save failed, reverting:", e);
     }
-  }, [onSaved, close, post]);
+  }, [onSaved, close]);
 
   const row = activeKey ? rows.find((r) => r.key === activeKey) : null;
   if (!activeKey || !row || !pos) return null;
