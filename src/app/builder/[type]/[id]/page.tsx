@@ -388,14 +388,6 @@ export default function BuilderPage() {
         post({ type: "cms:block-active", id });
         if (opts?.locate !== false) post({ type: "cms:block-locate", id });
 
-        // If selecting image/video from rail, open MediaPop
-        if (b && (b.kind === "image" || b.kind === "video")) {
-          setActiveMediaId(b.id);
-          setActiveMediaKind(b.kind);
-          setActiveMediaUrl(String(b.media_url ?? ""));
-          setActiveMediaCaption(String(b.heading ?? ""));
-        }
-
         // Bring the card into view in the rail.
         requestAnimationFrame(() => {
           cardRefs.current
@@ -457,38 +449,11 @@ export default function BuilderPage() {
           openSettings();
           return;
         }
-        // Clicking a block selects its rail card, then floats exactly ONE
-        // popup over it: the media popup for image/video, the style toolbar
-        // for everything else — never both.
+        // Clicking a block in the preview selects its rail card and opens
+        // the rail — every field a block has (text, media, style, layout)
+        // lives there. No on-canvas popup.
         selectBlock(d.id, { locate: false });
-
-        const block = blocksRef.current.find((b) => b.id === d.id);
-        if (block && (block.kind === "image" || block.kind === "video")) {
-          setActiveMediaId(block.id);
-          setActiveMediaKind(block.kind);
-          setActiveMediaUrl(String(block.media_url ?? ""));
-          setActiveMediaCaption(String(block.heading ?? ""));
-          if (d.rect) {
-            setTimeout(() => {
-              mediaPopRef.current?.setRect(d.id!, d.rect!);
-            }, 50);
-          }
-        } else {
-          setActiveMediaId(null);
-          setActiveMediaKind(null);
-          setActiveMediaUrl("");
-          if (d.rect) blockPopRef.current?.setRect(d.id, d.rect);
-        }
-      } else if (d?.type === "cms:block-rect" && d.id && d.rect) {
-        const rectBlock = blocksRef.current.find((b) => b.id === d.id);
-        const isMedia = rectBlock?.kind === "image" || rectBlock?.kind === "video";
-        if (isMedia) {
-          if (d.id === selectedRef.current) {
-            mediaPopRef.current?.setRect(d.id, d.rect);
-          }
-        } else {
-          blockPopRef.current?.setRect(d.id, d.rect);
-        }
+        setRailOpen(true);
       } else if (d?.type === "cms:block-drop" && d.id) {
         // Preview drag-drop: slot a block immediately before a sibling in its
         // OWN scope (top level, or within one row), then persist the reflowed
