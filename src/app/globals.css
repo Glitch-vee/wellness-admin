@@ -2395,16 +2395,42 @@ textarea {
 
 /* ---------- responsive ---------- */
 @media (max-width: 980px) {
+  .main:has(.builder) {
+    padding: 0;
+    max-width: none;
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  .builder-head--slim {
+    padding: 10px 14px !important;
+    flex: none;
+  }
+
   .builder {
     grid-template-columns: 1fr;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    overflow-y: auto;
+  }
+
+  .builder__rail {
+    flex: none;
   }
 
   .builder__stage {
     position: static;
+    flex: 1;
+    min-height: 0;
   }
 
   .builder__frame {
-    height: 60vh;
+    height: 100%;
   }
 }
 
