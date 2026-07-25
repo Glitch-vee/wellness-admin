@@ -246,6 +246,9 @@ export default function BuilderPage() {
   const [textRows, setTextRows] = useState<TextRow[]>([]);
   const [activeTextKey, setActiveTextKey] = useState<string | null>(null);
   const [railOpen, setRailOpen] = useState(false);
+  const [dirtyBlockIds, setDirtyBlockIds] = useState<Set<string>>(new Set());
+  const [dirtyTextKeys, setDirtyTextKeys] = useState<Set<string>>(new Set());
+  const [savingAll, setSavingAll] = useState(false);
   const [activeMediaId, setActiveMediaId] = useState<string | null>(null);
   const [activeMediaKind, setActiveMediaKind] = useState<string | null>(null);
   const [activeMediaUrl, setActiveMediaUrl] = useState("");
@@ -526,22 +529,17 @@ export default function BuilderPage() {
         if (d.rect) textPopRef.current?.setRect(d.key, d.rect);
         openTextKey(d.key);
       } else if (d?.type === "cms:text-change" && d.key && d.value !== undefined) {
+        const key = d.key;
+        const value = d.value;
         setTextRows((rs) =>
-          rs.map((r) => (r.key === d.key ? { ...r, value: d.value! } : r))
+          rs.map((r) => (r.key === key ? { ...r, value } : r))
         );
-        void (async () => {
-          try {
-            await api("/api/blocks", {
-              method: "PUT",
-              body: JSON.stringify({
-                rows: [{ key: d.key, value: d.value }],
-              }),
-            });
-            showFlash({ text: "Saved inline", tone: "ok" });
-          } catch (e) {
-            console.error("Failed to save inline:", e);
-          }
-        })();
+        setDirtyTextKeys((prev) => {
+          const next = new Set(prev);
+          next.add(key);
+          return next;
+        });
+        showFlash({ text: "Draft updated inline", tone: "ok" });
       } else if (d?.type === "cms:rect" && d.key && d.rect) {
         textPopRef.current?.setRect(d.key, d.rect);
       } else if (d?.type === "cms:ready") {
@@ -599,56 +597,84 @@ export default function BuilderPage() {
     []
   );
 
+  const saveAllChanges = useCallback(async () => {
+    if (!cfg) return;
+    setSavingAll(true);
+    setMsg("");
+    try {
+      const promises: Promise<unknown>[] = [];
+
+      if (dirtyBlockIds.size > 0) {
+        const blockPromises = Array.from(dirtyBlockIds).map(async (id) => {
+          const block = blocksRef.current.find((b) => b.id === id);
+          if (!block) return;
+          const { d } = await sendSectionRef.current(
+            `/api/table/${cfg.childTable}/${id}`,
+            "PUT",
+            block
+          );
+          setBlocks((bs) => bs.map((b) => (b.id === id ? d.row : b)));
+        });
+        promises.push(...blockPromises);
+      }
+
+      if (dirtyTextKeys.size > 0) {
+        const rowsToSave = textRowsRef.current.filter((r) => dirtyTextKeys.has(r.key));
+        if (rowsToSave.length > 0) {
+          const textPromise = api("/api/blocks", {
+            method: "PUT",
+            body: JSON.stringify({ rows: rowsToSave }),
+          });
+          promises.push(textPromise);
+        }
+      }
+
+      await Promise.all(promises);
+
+      setDirtyBlockIds(new Set());
+      setDirtyTextKeys(new Set());
+      showFlash({ text: "All drafts saved to database", tone: "ok" });
+      post({ type: "cms:reload" });
+    } catch (e) {
+      setMsg(`Save failed: ${e instanceof Error ? e.message : "Error saving changes"}`);
+    } finally {
+      setSavingAll(false);
+    }
+  }, [cfg, dirtyBlockIds, dirtyTextKeys, showFlash, post]);
+
   const saveMediaUrl = useCallback(
-    async (id: string, url: string) => {
+    (id: string, url: string) => {
       if (!cfg) return;
       const block = blocks.find((b) => b.id === id);
       if (!block) return;
 
-      const updatedBlock = { ...block, media_url: url };
-      setBlocks((bs) => bs.map((b) => (b.id === id ? updatedBlock : b)));
+      setBlocks((bs) => bs.map((b) => (b.id === id ? { ...b, media_url: url } : b)));
+      setDirtyBlockIds((prev) => {
+        const next = new Set(prev);
+        next.add(id);
+        return next;
+      });
       post({ type: "cms:block-media", id, url });
-
-      try {
-        const { d, skipped } = await sendSection(
-          `/api/table/${cfg.childTable}/${id}`,
-          "PUT",
-          updatedBlock
-        );
-        setBlocks((bs) => bs.map((b) => (b.id === id ? d.row : b)));
-        showFlash(pendingFlash(skipped) ?? saveMsg(d.publish));
-      } catch (e) {
-        setBlocks((bs) => bs.map((b) => (b.id === id ? block : b)));
-        post({ type: "cms:block-media", id, url: String(block.media_url ?? "") });
-        setMsg(`Failed to save media URL: ${e instanceof Error ? e.message : "Save failed"}`);
-      }
+      showFlash({ text: "Media draft updated", tone: "ok" });
     },
-    [cfg, blocks, sendSection, showFlash, post]
+    [cfg, blocks, post, showFlash]
   );
 
-  const saveBlock = useCallback(async () => {
+  const saveBlock = useCallback(() => {
     const id = selectedRef.current;
     if (!cfg || !id || !draft) return;
     const block = blocksRef.current.find((b) => b.id === id);
     if (!block) return;
 
-    const updatedBlock = { ...block, ...draft };
-    setBlocks((bs) => bs.map((b) => (b.id === id ? updatedBlock : b)));
+    setBlocks((bs) => bs.map((b) => (b.id === id ? { ...b, ...draft } : b)));
+    setDirtyBlockIds((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
     setDirty(false);
-
-    try {
-      const { d, skipped } = await sendSection(
-        `/api/table/${cfg.childTable}/${id}`,
-        "PUT",
-        updatedBlock
-      );
-      setBlocks((bs) => bs.map((b) => (b.id === id ? d.row : b)));
-      showFlash(pendingFlash(skipped) ?? saveMsg(d.publish));
-    } catch (e) {
-      setBlocks((bs) => bs.map((b) => (b.id === id ? block : b)));
-      setMsg(`Failed to save block: ${e instanceof Error ? e.message : "Save failed"}`);
-    }
-  }, [cfg, draft, sendSection, showFlash]);
+    showFlash({ text: "Draft updated", tone: "ok" });
+  }, [cfg, draft, showFlash]);
 
   const cancelEdit = useCallback(() => {
     const id = selectedRef.current;
@@ -1543,6 +1569,17 @@ export default function BuilderPage() {
           </button>
         </div>
         <div className="row-actions">
+          {(dirtyBlockIds.size > 0 || dirtyTextKeys.size > 0) && (
+            <button
+              type="button"
+              className="btn btn--green"
+              style={{ fontWeight: "bold" }}
+              onClick={saveAllChanges}
+              disabled={savingAll}
+            >
+              {savingAll ? "💾 Saving..." : "💾 Save Changes"}
+            </button>
+          )}
           {!isSite && (
             <button className="btn" onClick={openSettings} disabled={!parent}>
               ⚙️ Page settings
@@ -1791,7 +1828,7 @@ export default function BuilderPage() {
         rows={textRows}
         activeKey={activeTextKey}
         onClose={() => setActiveTextKey(null)}
-        onSaved={(key, value, style, publish) => {
+        onSaved={(key, value, style) => {
           setTextRows((rs) =>
             rs.map((r) =>
               r.key === key
@@ -1799,7 +1836,12 @@ export default function BuilderPage() {
                 : r
             )
           );
-          showFlash(saveMsg(publish));
+          setDirtyTextKeys((prev) => {
+            const next = new Set(prev);
+            next.add(key);
+            return next;
+          });
+          showFlash({ text: "Text draft updated", tone: "ok" });
         }}
       />
 
