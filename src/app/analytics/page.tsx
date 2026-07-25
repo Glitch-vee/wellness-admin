@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
-import StatTile from "@/components/stats/StatTile";
-import Bars, { type BarDatum } from "@/components/stats/Bars";
-import HBar from "@/components/stats/HBar";
-import Feed, { type FeedItem } from "@/components/stats/Feed";
+import StatTile from "@/components/molecules/StatTile";
+import Bars, { type BarDatum } from "@/components/atoms/Bars";
+import HBar from "@/components/atoms/HBar";
+import Feed, { type FeedItem } from "@/components/molecules/Feed";
 import "../grow.css";
 
 /**
