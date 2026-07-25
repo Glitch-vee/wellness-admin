@@ -958,7 +958,22 @@ export default function BlockEditor({
               Big button
             </label>
           )}
+          <div className="field">
+            <label>Layer</label>
+            <input
+              value={pStr("layer")}
+              placeholder="e.g. 1"
+              spellCheck={false}
+              onChange={(e) => setProps({ layer: e.target.value.trim() || null })}
+            />
+          </div>
         </div>
+        {pStr("layer") !== "" && (
+          <p className="hint">
+            Blocks next to each other with the same Layer split space evenly
+            side by side. Clear it to make this block full-width again.
+          </p>
+        )}
     </fieldset>
   );
 

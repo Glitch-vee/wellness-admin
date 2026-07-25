@@ -396,6 +396,21 @@ textarea {
   color: var(--green-bright);
 }
 
+.bcard__layerbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.bcard__layerbar .chip {
+  cursor: pointer;
+}
+.chip--on {
+  background: var(--green);
+  border-color: transparent;
+  color: #fff;
+}
+
 .field {
   margin-top: 14px;
 }
