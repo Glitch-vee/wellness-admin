@@ -9,7 +9,7 @@ import {
   useState,
   type RefObject,
 } from "react";
-import { api, type Publish } from "@/lib/api";
+import { type Publish } from "@/lib/api";
 
 /**
  * The floating "edit this text" pop, ported from the Page Text screen so the
@@ -275,36 +275,15 @@ const TextPop = forwardRef<
     close();
   }, [revertKey, close]);
 
-  const save = useCallback(async () => {
+  const save = useCallback(() => {
     const key = activeKeyRef.current;
     if (!key) return;
     const value = draftRef.current;
     const style = styleDirtyRef.current ? styleDraftRef.current : undefined;
-    
-    const row = rowsRef.current.find((r) => r.key === key);
-    const origValue = row ? row.value : "";
-    const origStyle = row?.style ? { ...row.style } : undefined;
 
-    // Close and update state immediately
+    // Draft only — the DB write happens on "Save Changes".
     onSaved(key, value, style, undefined);
     close();
-
-    try {
-      await api<{
-        ok: boolean;
-        publish?: Publish;
-        styleSkipped?: boolean;
-      }>("/api/blocks", {
-        method: "PUT",
-        body: JSON.stringify({
-          rows: [style ? { key, value, style } : { key, value }],
-        }),
-      });
-    } catch (e) {
-      // Revert on error
-      onSaved(key, origValue, origStyle, undefined);
-      console.error("Optimistic save failed, reverting:", e);
-    }
   }, [onSaved, close]);
 
   const row = activeKey ? rows.find((r) => r.key === activeKey) : null;

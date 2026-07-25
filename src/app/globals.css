@@ -150,6 +150,10 @@ textarea {
 .builder-head--slim {
   padding-block: 6px !important;
   min-height: 44px !important;
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: var(--canvas);
 }
 .builder-head--slim h1 {
   font-size: 15px !important;
