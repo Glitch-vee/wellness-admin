@@ -1461,6 +1461,13 @@ export default function BuilderPage() {
                     style: p.style,
                   });
                 }
+                if (p.layout !== undefined) {
+                  post({
+                    type: "cms:block-layout",
+                    id: b.id,
+                    layout: p.layout,
+                  });
+                }
               }}
             />
             {isSecKind(draft.kind) &&
