@@ -2411,12 +2411,18 @@ textarea {
     flex: none;
   }
 
+  .row-actions {
+    flex-wrap: wrap;
+    margin-left: 0;
+  }
+
   .builder {
     grid-template-columns: 1fr;
     flex: 1;
     min-height: 0;
     display: flex;
     flex-direction: column;
+    align-items: stretch;
     gap: 0;
     overflow-y: auto;
   }
