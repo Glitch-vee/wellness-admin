@@ -578,6 +578,28 @@ export default function BuilderPage() {
           return next;
         });
         showFlash({ text: "Position draft updated", tone: "ok" });
+      } else if (d?.type === "cms:block-freeplace" && d.id) {
+        // Dropped in open canvas space — promote to free position (this is
+        // what actually makes top/left take effect; CSS ignores them
+        // without position:absolute). Draft only, same as every other
+        // on-canvas edit.
+        if (!cfg) return;
+        const id = d.id;
+        const block = blocksRef.current.find((r) => r.id === id);
+        if (!block) return;
+        const style = jsonOf(block, "style");
+        style.position = "overlay";
+        style.top = d.top;
+        style.left = d.left;
+        setBlocks((bs) => bs.map((b) => (b.id === id ? { ...b, style } : b)));
+        if (id === selectedRef.current)
+          setDraft((cur) => (cur ? { ...cur, style } : cur));
+        setDirtyBlockIds((prev) => {
+          const next = new Set(prev);
+          next.add(id);
+          return next;
+        });
+        showFlash({ text: "Moved to free position", tone: "ok" });
       } else if (d?.type === "cms:block-key" && d.id) {
         // Keyboard nudge, forwarded from the preview (it owns keyboard focus
         // inside its own iframe — see PreviewBridge.tsx's onKeyDown). Only
