@@ -32,14 +32,16 @@ const MediaPop = forwardRef<
     activeId: string | null;
     activeKind: string | null; // "image" | "video"
     initialUrl: string;
-    onSave: (id: string, url: string) => void;
+    initialCaption: string;
+    onSave: (id: string, url: string, caption: string) => void;
     onClose: () => void;
   }
 >(function MediaPop(
-  { iframeRef, activeId, activeKind, initialUrl, onSave, onClose },
+  { iframeRef, activeId, activeKind, initialUrl, initialCaption, onSave, onClose },
   ref
 ) {
   const [url, setUrl] = useState("");
+  const [caption, setCaption] = useState("");
   const [pos, setPos] = useState<Pos | null>(null);
   const [imgOk, setImgOk] = useState(false);
 
@@ -47,8 +49,10 @@ const MediaPop = forwardRef<
   const stashedRect = useRef<{ id: string; rect: Rect } | null>(null);
   const activeIdRef = useRef<string | null>(null);
   const urlRef = useRef("");
+  const captionRef = useRef("");
   activeIdRef.current = activeId;
   urlRef.current = url;
+  captionRef.current = caption;
 
   // Position the pop over the anchored block.
   const reposition = useCallback(() => {
@@ -88,8 +92,9 @@ const MediaPop = forwardRef<
 
   // React to the builder selecting/clearing a block.
   useEffect(() => {
-    if (!activeId) { setAnchor(null); setUrl(""); return; }
+    if (!activeId) { setAnchor(null); setUrl(""); setCaption(""); return; }
     setUrl(initialUrl);
+    setCaption(initialCaption);
     setImgOk(false);
     const stash = stashedRect.current;
     setAnchor(stash && stash.id === activeId ? stash.rect : null);
@@ -110,7 +115,7 @@ const MediaPop = forwardRef<
 
   const save = useCallback(() => {
     if (!activeIdRef.current) return;
-    onSave(activeIdRef.current, urlRef.current);
+    onSave(activeIdRef.current, urlRef.current, captionRef.current);
     onClose();
   }, [onSave, onClose]);
 
@@ -163,6 +168,16 @@ const MediaPop = forwardRef<
           placeholder={isImage ? "https://… or /path/to/image.jpg" : "https://… video URL or embed"}
           onChange={(e) => { setUrl(e.target.value); setImgOk(false); }}
         />
+
+        {isImage && (
+          <input
+            type="text"
+            className="cms-pop__input mediapop__captioninput"
+            value={caption}
+            placeholder="Caption (optional)"
+            onChange={(e) => setCaption(e.target.value)}
+          />
+        )}
 
         <div className="cms-pop__foot">
           <span className="cms-pop__hint">Enter to save · Esc to cancel</span>

@@ -254,6 +254,7 @@ export default function BuilderPage() {
   const [activeMediaId, setActiveMediaId] = useState<string | null>(null);
   const [activeMediaKind, setActiveMediaKind] = useState<string | null>(null);
   const [activeMediaUrl, setActiveMediaUrl] = useState("");
+  const [activeMediaCaption, setActiveMediaCaption] = useState("");
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -371,6 +372,7 @@ export default function BuilderPage() {
       setActiveMediaId(null);
       setActiveMediaKind(null);
       setActiveMediaUrl("");
+      setActiveMediaCaption("");
 
       if (id) {
         const b = blocksRef.current.find((r) => r.id === id);
@@ -383,6 +385,7 @@ export default function BuilderPage() {
           setActiveMediaId(b.id);
           setActiveMediaKind(b.kind);
           setActiveMediaUrl(String(b.media_url ?? ""));
+          setActiveMediaCaption(String(b.heading ?? ""));
         }
 
         // Bring the card into view in the rail.
@@ -446,17 +449,17 @@ export default function BuilderPage() {
           openSettings();
           return;
         }
-        // Clicking a block both selects its rail card AND floats the style
-        // toolbar over it — anchor the pop with the rect that came along.
-        if (d.rect) blockPopRef.current?.setRect(d.id, d.rect);
+        // Clicking a block selects its rail card, then floats exactly ONE
+        // popup over it: the media popup for image/video, the style toolbar
+        // for everything else — never both.
         selectBlock(d.id, { locate: false });
 
-        // Route media popup if kind is image or video
         const block = blocksRef.current.find((b) => b.id === d.id);
         if (block && (block.kind === "image" || block.kind === "video")) {
           setActiveMediaId(block.id);
           setActiveMediaKind(block.kind);
           setActiveMediaUrl(String(block.media_url ?? ""));
+          setActiveMediaCaption(String(block.heading ?? ""));
           if (d.rect) {
             setTimeout(() => {
               mediaPopRef.current?.setRect(d.id!, d.rect!);
@@ -466,11 +469,17 @@ export default function BuilderPage() {
           setActiveMediaId(null);
           setActiveMediaKind(null);
           setActiveMediaUrl("");
+          if (d.rect) blockPopRef.current?.setRect(d.id, d.rect);
         }
       } else if (d?.type === "cms:block-rect" && d.id && d.rect) {
-        blockPopRef.current?.setRect(d.id, d.rect);
-        if (d.id === selectedRef.current) {
-          mediaPopRef.current?.setRect(d.id, d.rect);
+        const rectBlock = blocksRef.current.find((b) => b.id === d.id);
+        const isMedia = rectBlock?.kind === "image" || rectBlock?.kind === "video";
+        if (isMedia) {
+          if (d.id === selectedRef.current) {
+            mediaPopRef.current?.setRect(d.id, d.rect);
+          }
+        } else {
+          blockPopRef.current?.setRect(d.id, d.rect);
         }
       } else if (d?.type === "cms:block-drop" && d.id) {
         // Preview drag-drop: slot a block immediately before a sibling in its
@@ -645,18 +654,20 @@ export default function BuilderPage() {
   }, [cfg, dirtyBlockIds, dirtyTextKeys, showFlash, post]);
 
   const saveMediaUrl = useCallback(
-    (id: string, url: string) => {
+    (id: string, url: string, caption: string) => {
       if (!cfg) return;
       const block = blocks.find((b) => b.id === id);
       if (!block) return;
 
-      setBlocks((bs) => bs.map((b) => (b.id === id ? { ...b, media_url: url } : b)));
+      setBlocks((bs) =>
+        bs.map((b) => (b.id === id ? { ...b, media_url: url, heading: caption } : b))
+      );
       setDirtyBlockIds((prev) => {
         const next = new Set(prev);
         next.add(id);
         return next;
       });
-      post({ type: "cms:block-media", id, url });
+      post({ type: "cms:block-media", id, url, caption });
       showFlash({ text: "Media draft updated", tone: "ok" });
     },
     [cfg, blocks, post, showFlash]
@@ -1879,11 +1890,13 @@ export default function BuilderPage() {
         activeId={activeMediaId}
         activeKind={activeMediaKind}
         initialUrl={activeMediaUrl}
+        initialCaption={activeMediaCaption}
         onSave={saveMediaUrl}
         onClose={() => {
           setActiveMediaId(null);
           setActiveMediaKind(null);
           setActiveMediaUrl("");
+          setActiveMediaCaption("");
         }}
       />
 

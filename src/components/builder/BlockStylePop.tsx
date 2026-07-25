@@ -184,7 +184,15 @@ const BlockStylePop = forwardRef<
     () => ({
       setRect(id, rect) {
         stashedRect.current = { id, rect };
-        if (id === activeIdRef.current) setAnchor(rect);
+        if (id === activeIdRef.current) {
+          // A fresh focus on the block that's already selected (e.g. the
+          // edit icon clicked again after Done/Esc dismissed the popup) —
+          // reopen it. Without this, dismissed stays true forever because
+          // the "selecting a new block" effect only fires on an activeId
+          // change, and this is the same id.
+          setDismissed(false);
+          setAnchor(rect);
+        }
       },
       notifyReady() {
         const id = activeIdRef.current;
