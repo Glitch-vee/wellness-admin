@@ -460,7 +460,11 @@ export default function BuilderPage() {
        * into z-index at render time) AND the reflow-grouping tag, so this
        * is the same number the rail's Layer field shows — not a hidden
        * separate value. */
-      const nudgeLayer = (action: "front" | "back" | "forward" | "backward") => {
+      const nudgeLayer = (
+        action: "front" | "back" | "forward" | "backward",
+        top?: string,
+        left?: string
+      ) => {
         const id = selectedRef.current;
         if (!id) return;
         const block = blocksRef.current.find((r) => r.id === id);
@@ -474,8 +478,23 @@ export default function BuilderPage() {
               ? 0
               : Math.min(999, Math.max(0, cur + (action === "forward" ? 1 : -1)));
         props.layer = String(next);
-        setBlocks((bs) => bs.map((b) => (b.id === id ? { ...b, props } : b)));
-        setDraft((cur2) => (cur2 ? { ...cur2, props } : cur2));
+        const style = jsonOf(block, "style");
+        // Layer is the ONE thing allowed to pull a block out of flow (per
+        // explicit instruction — dragging never does this anymore). A block
+        // whose stacking order matters is one you're deliberately trying to
+        // put above/below other content, which a normal-flow block can't
+        // really do (position:relative only affects ties among its own
+        // untouched siblings). Seed top/left from wherever it's currently
+        // sitting (sent along with the on-canvas button click) so it
+        // doesn't jump; keyboard-triggered nudges have no geometry to send,
+        // so they fall back to 0,0.
+        if (style.position !== "overlay" && style.position !== "sticky") {
+          style.position = "overlay";
+          style.top = top ?? "0px";
+          style.left = left ?? "0px";
+        }
+        setBlocks((bs) => bs.map((b) => (b.id === id ? { ...b, props, style } : b)));
+        setDraft((cur2) => (cur2 ? { ...cur2, props, style } : cur2));
         setDirtyBlockIds((prev) => {
           const next2 = new Set(prev);
           next2.add(id);
@@ -661,7 +680,7 @@ export default function BuilderPage() {
       } else if (d?.type === "cms:block-layer" && d.id && d.action) {
         // On-canvas layer buttons — same constraint as cms:block-key.
         if (d.id !== selectedRef.current) return;
-        nudgeLayer(d.action);
+        nudgeLayer(d.action, d.top, d.left);
       } else if (d?.type === "cms:focus" && d.key) {
         // Keyed text clicked in the preview — open TextPop over it.
         if (!textRowsRef.current.some((r) => r.key === d.key)) return;
