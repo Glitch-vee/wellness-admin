@@ -320,13 +320,21 @@ export function sanitizeRow(
   return out;
 }
 
-/** Allowlist a block-layout payload: {span?, align?, shape?, size?}. */
+/** Allowlist a block-layout payload: {span?, col?, align?, shape?, size?}. */
 function sanitizeLayout(value: unknown): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   if (!value || typeof value !== "object" || Array.isArray(value)) return out;
   const l = value as Record<string, unknown>;
+  // 1…5 (a 6-span block is full width and carries no class at all). This used
+  // to allowlist [2,3,4,6]: spans 1 and 5 are offered by the rail AND by the
+  // canvas resize handle, previewed live — and then silently dropped here, so
+  // a ⅙/⅚ block snapped back to full width on the next reload.
   const span = Number(l.span);
-  if ([2, 3, 4, 6].includes(span)) out.span = span;
+  if (span >= 1 && span <= 5) out.span = Math.round(span);
+  // Which of the 6 columns the block starts in — only meaningful alongside a
+  // span, and it can never push the block past the last column.
+  const col = Number(l.col);
+  if (out.span && col >= 1 && col <= 7 - (out.span as number)) out.col = Math.round(col);
   if (["left", "center", "right"].includes(String(l.align))) {
     out.align = String(l.align);
   }
@@ -389,6 +397,22 @@ export function sanitizeProps(value: unknown): Record<string, unknown> {
   }
   if (["gallery", "about", "before-after"].includes(String(p.slot))) {
     out.slot = String(p.slot);
+  }
+  // Stacking order / grouping tag. This was missing entirely, so EVERY write
+  // of props.layer — the rail's Layer field, the on-canvas ⏮◀▶⏭ buttons, the
+  // [ / ] shortcuts — was silently discarded on save while the side effects it
+  // triggered were persisted. Numeric values become z-index at render time; a
+  // non-numeric tag groups adjacent blocks instead (see groupByLayer).
+  if (typeof p.layer === "string" || typeof p.layer === "number") {
+    const raw = String(p.layer).trim().slice(0, 24);
+    const n = Number(raw);
+    if (raw === "") {
+      /* cleared — drop it */
+    } else if (Number.isFinite(n)) {
+      out.layer = String(Math.min(999, Math.max(0, Math.round(n))));
+    } else if (/^[\w-]+$/.test(raw)) {
+      out.layer = raw;
+    }
   }
 
   // --- layout container (Phase 3): the `row` kind's column settings ---

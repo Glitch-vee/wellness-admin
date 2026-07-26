@@ -917,6 +917,32 @@ export default function BlockEditor({
               <option value="1">One sixth</option>
             </select>
           </div>
+          {/* Which of the 6 grid columns the block starts in. Only means
+              anything once the block is narrower than full width — a
+              full-width block has exactly one place it can be. This is the
+              same value dragging a block sideways on the canvas writes. */}
+          {Number(layout.span) >= 1 && Number(layout.span) <= 5 && (
+            <div className="field">
+              <label>Start column</label>
+              <select
+                value={String(layout.col ?? "")}
+                onChange={(e) =>
+                  patchLayout({
+                    col: e.target.value === "" ? null : Number(e.target.value),
+                  })
+                }
+              >
+                <option value="">Auto</option>
+                {Array.from({ length: 7 - Number(layout.span) }, (_, i) => i + 1).map(
+                  (c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  )
+                )}
+              </select>
+            </div>
+          )}
           <div className="field">
             <label>Alignment</label>
             <select
@@ -1400,7 +1426,36 @@ export function StylePanel({
         <legend>Position</legend>
         <div className="bkstyle__row">
           {sel("Visibility", "hideOn", HIDE_ON_OPTIONS)}
-          {sel("Layout mode", "position", POSITION_OPTIONS)}
+          {/* Not the generic sel(): switching back to Default has to clear the
+              OFFSETS too. Leaving stale top/left behind meant the fields
+              vanished (they only render for overlay) while their values were
+              still stored — so re-enabling overlay later snapped the block
+              straight back to the coordinates that lost it. */}
+          <div className="field bkstyle__field">
+            <label>Layout mode</label>
+            <select
+              value={val("position")}
+              onChange={(e) =>
+                onPatch(
+                  e.target.value
+                    ? { position: e.target.value }
+                    : {
+                        position: null,
+                        top: null,
+                        left: null,
+                        right: null,
+                        bottom: null,
+                      }
+                )
+              }
+            >
+              {POSITION_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
         {val("position") === "overlay" && (
           <>

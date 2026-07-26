@@ -112,7 +112,17 @@ function layoutChips(row: Row): string[] {
   else if (l.align === "right") chips.push("→");
   if (l.shape === "circle") chips.push("◯");
   if (l.size === "big") chips.push("L");
+  const col = Number(l.col);
+  if (span >= 1 && span <= 5 && col >= 1 && col <= 6) chips.push(`col ${col}`);
   return chips;
+}
+
+/** True when a block has been pulled out of the page's normal flow. Such a
+ * block is absolutely positioned: it can sit on top of other content, or
+ * outside its section entirely, where it is easy to lose. The rail flags it
+ * so "my block vanished" is always visible and always one click from fixed. */
+function isOffGrid(row: Row): boolean {
+  return jsonOf(row, "style").position === "overlay";
 }
 
 /** A block row's parent_id (container link), "" when none. */
@@ -361,6 +371,13 @@ export default function BuilderPage() {
   // The rail is a one-level tree: top-level cards, with a row's children
   // indented beneath it. Rebuilt whenever the flat block list changes.
   const tree = useMemo(() => buildTree(blocks), [blocks]);
+  /** Blocks currently floating outside normal flow — see isOffGrid. Surfaced
+   * as a header action so a page can always be recovered in one click, even
+   * when the blocks themselves are off-screen and unclickable in the preview. */
+  const offGridIds = useMemo(
+    () => blocks.filter(isOffGrid).map((b) => b.id),
+    [blocks]
+  );
 
   const selectBlock = useCallback(
     (id: string | null, opts?: { locate?: boolean }) => {
@@ -453,6 +470,8 @@ export default function BuilderPage() {
         k?: string; // cms:block-key's pressed key — NOT `key` (that's the keyed-text field above)
         shift?: boolean;
         action?: "front" | "back" | "forward" | "backward"; // cms:block-layer
+        col?: number; // cms:block-place — 1-based column in the 6-col grid
+        reorder?: boolean; // cms:block-place — whether beforeId is meaningful
       };
       /** Shared layer-number nudge for cms:block-key's [ / ] and the
        * on-canvas layer buttons — only ever acts on the currently selected
@@ -460,11 +479,7 @@ export default function BuilderPage() {
        * into z-index at render time) AND the reflow-grouping tag, so this
        * is the same number the rail's Layer field shows — not a hidden
        * separate value. */
-      const nudgeLayer = (
-        action: "front" | "back" | "forward" | "backward",
-        top?: string,
-        left?: string
-      ) => {
+      const nudgeLayer = (action: "front" | "back" | "forward" | "backward") => {
         const id = selectedRef.current;
         if (!id) return;
         const block = blocksRef.current.find((r) => r.id === id);
@@ -478,23 +493,13 @@ export default function BuilderPage() {
               ? 0
               : Math.min(999, Math.max(0, cur + (action === "forward" ? 1 : -1)));
         props.layer = String(next);
-        const style = jsonOf(block, "style");
-        // Layer is the ONE thing allowed to pull a block out of flow (per
-        // explicit instruction — dragging never does this anymore). A block
-        // whose stacking order matters is one you're deliberately trying to
-        // put above/below other content, which a normal-flow block can't
-        // really do (position:relative only affects ties among its own
-        // untouched siblings). Seed top/left from wherever it's currently
-        // sitting (sent along with the on-canvas button click) so it
-        // doesn't jump; keyboard-triggered nudges have no geometry to send,
-        // so they fall back to 0,0.
-        if (style.position !== "overlay" && style.position !== "sticky") {
-          style.position = "overlay";
-          style.top = top ?? "0px";
-          style.left = left ?? "0px";
-        }
-        setBlocks((bs) => bs.map((b) => (b.id === id ? { ...b, props, style } : b)));
-        setDraft((cur2) => (cur2 ? { ...cur2, props, style } : cur2));
+        // Layer is stacking order, full stop. It used to ALSO flip the block
+        // to position:overlay — which meant one ⏮/⏭ click, or a stray `[`
+        // keypress (the keyboard path passed no geometry, so it landed at
+        // 0,0), tore the block out of the page. Leaving flow is now only ever
+        // explicit, via the rail's Position control.
+        setBlocks((bs) => bs.map((b) => (b.id === id ? { ...b, props } : b)));
+        setDraft((cur2) => (cur2 ? { ...cur2, props } : cur2));
         setDirtyBlockIds((prev) => {
           const next2 = new Set(prev);
           next2.add(id);
@@ -535,6 +540,53 @@ export default function BuilderPage() {
         scope.splice(insertAt, 0, moved);
         if (pid) childrenOf.set(pid, scope);
         applyOrderRef.current(flattenTree(pid ? top : scope, childrenOf));
+      } else if (d?.type === "cms:block-place" && d.id) {
+        // Canvas drag, unified. Carries where the block landed in the ORDER
+        // (reorder/beforeId — the old cms:block-drop) and/or which of the six
+        // grid columns it now occupies (col/span). Sliding sideways is purely
+        // a grid move: it never touches position/top/left, so a drag can no
+        // longer push a block out of the page.
+        if (!cfg) return;
+        const placeId = d.id;
+        const block = blocksRef.current.find((r) => r.id === placeId);
+        if (!block) return;
+
+        if (d.col !== undefined || d.span !== undefined) {
+          const layout = layoutOf(block);
+          const span = Number(d.span);
+          const col = Number(d.col);
+          if (span >= 1 && span <= 5) layout.span = span;
+          else delete layout.span;
+          // A full-width block starts at column 1 by definition — no explicit
+          // column, so it keeps auto-placing.
+          if (layout.span && col >= 1 && col <= 6) layout.col = col;
+          else delete layout.col;
+          setBlocks((bs) => bs.map((b) => (b.id === placeId ? { ...b, layout } : b)));
+          setDirtyBlockIds((prev) => {
+            const next = new Set(prev);
+            next.add(placeId);
+            return next;
+          });
+        }
+
+        if (d.reorder && d.beforeId !== placeId) {
+          const list = blocksRef.current;
+          const { top, childrenOf } = buildTree(list);
+          const pid = parentIdOf(block);
+          const scope = pid ? [...(childrenOf.get(pid) ?? [])] : [...top];
+          const from = scope.findIndex((r) => r.id === placeId);
+          if (from >= 0) {
+            const [moved] = scope.splice(from, 1);
+            const at = d.beforeId ? scope.findIndex((r) => r.id === d.beforeId) : -1;
+            const insertAt = at < 0 ? scope.length : at;
+            if (insertAt !== from) {
+              scope.splice(insertAt, 0, moved);
+              if (pid) childrenOf.set(pid, scope);
+              applyOrderRef.current(flattenTree(pid ? top : scope, childrenOf));
+            }
+          }
+        }
+        showFlash({ text: "Moved in the grid", tone: "ok" });
       } else if (d?.type === "cms:block-resize" && d.id) {
         // Preview resize handle: set a TOP-LEVEL block's grid width. Row
         // children size by their column, not span — ignore those. Draft
@@ -604,8 +656,11 @@ export default function BuilderPage() {
         if (!block) return;
         const style = jsonOf(block, "style");
         style.position = "overlay";
-        style.top = d.top;
-        style.left = d.left;
+        // Guard: assigning `undefined` here silently produced an overlay block
+        // with NO offsets at all once JSON.stringify dropped the keys —
+        // absolute, shrink-to-fit, wherever its static position happened to be.
+        if (d.top !== undefined) style.top = d.top;
+        if (d.left !== undefined) style.left = d.left;
         setBlocks((bs) => bs.map((b) => (b.id === id ? { ...b, style } : b)));
         if (id === selectedRef.current)
           setDraft((cur) => (cur ? { ...cur, style } : cur));
@@ -680,7 +735,7 @@ export default function BuilderPage() {
       } else if (d?.type === "cms:block-layer" && d.id && d.action) {
         // On-canvas layer buttons — same constraint as cms:block-key.
         if (d.id !== selectedRef.current) return;
-        nudgeLayer(d.action, d.top, d.left);
+        nudgeLayer(d.action);
       } else if (d?.type === "cms:focus" && d.key) {
         // Keyed text clicked in the preview — open TextPop over it.
         if (!textRowsRef.current.some((r) => r.key === d.key)) return;
@@ -764,8 +819,15 @@ export default function BuilderPage() {
 
       if (dirtyBlockIds.size > 0) {
         const blockPromises = Array.from(dirtyBlockIds).map(async (id) => {
-          const block = blocksRef.current.find((b) => b.id === id);
-          if (!block) return;
+          const saved = blocksRef.current.find((b) => b.id === id);
+          if (!saved) return;
+          // Fold in the live draft for the block currently open in the rail —
+          // the on-canvas toolbar and arrow-key nudges only ever write `draft`,
+          // so PUTting blocksRef alone silently dropped every one of them.
+          const block =
+            id === selectedRef.current && draftRef.current
+              ? { ...saved, ...draftRef.current }
+              : saved;
           const { d } = await sendSectionRef.current(
             `/api/table/${cfg.childTable}/${id}`,
             "PUT",
@@ -861,6 +923,15 @@ export default function BuilderPage() {
       const style = mergeStyle(d.style ?? {}, patch);
       setDraft((cur) => (cur ? { ...cur, style } : cur));
       setDirty(true);
+      // Without this the on-canvas toolbar and the arrow-key nudges never
+      // surfaced the "Save Changes" button (it renders on dirtyBlockIds.size)
+      // and saveAllChanges skipped them — the edits looked applied and were
+      // thrown away. saveAllChanges now folds the live draft in too.
+      setDirtyBlockIds((prev) => {
+        const next = new Set(prev);
+        next.add(id);
+        return next;
+      });
       post({ type: "cms:block-style", id, style });
     },
     [post]
@@ -869,6 +940,36 @@ export default function BuilderPage() {
   // temporal-dead-zone dodge as applyOrderRef/sendSectionRef.
   const patchBlockStyleRef = useRef(patchBlockStyle);
   patchBlockStyleRef.current = patchBlockStyle;
+
+  /**
+   * One-click recovery for a block that has been pulled out of normal flow.
+   * A free-positioned block is `position:absolute`, so it can end up on top of
+   * other content or outside its section entirely — invisible and impossible
+   * to click on the canvas. This is the way back, and it works without needing
+   * to find the block first.
+   */
+  const returnToGrid = useCallback(
+    (id: string) => {
+      const b = blocksRef.current.find((r) => r.id === id);
+      if (!b) return;
+      const style = jsonOf(b, "style");
+      delete style.position;
+      delete style.top;
+      delete style.left;
+      delete style.right;
+      delete style.bottom;
+      setBlocks((bs) => bs.map((r) => (r.id === id ? { ...r, style } : r)));
+      if (id === selectedRef.current)
+        setDraft((cur) => (cur ? { ...cur, style } : cur));
+      setDirtyBlockIds((prev) => {
+        const next = new Set(prev);
+        next.add(id);
+        return next;
+      });
+      post({ type: "cms:block-style", id, style });
+    },
+    [post]
+  );
 
   /** Esc in the toolbar: drop the unsaved style, live-revert to what's saved. */
   const revertBlockStyle = useCallback(() => {
@@ -1473,6 +1574,19 @@ export default function BuilderPage() {
                 {c}
               </span>
             ))}
+          {isOffGrid(b) && (
+            <button
+              type="button"
+              className="bcard__offgrid"
+              title="This block is floating free — it can overlap other blocks or sit outside the page. Click to put it back in the grid."
+              onClick={(e) => {
+                e.stopPropagation();
+                returnToGrid(b.id);
+              }}
+            >
+              ⚠ off-grid — put back
+            </button>
+          )}
           {!isSel && hasStyle(b.style) && (
             <span className="bcard__stylechip" title="Custom styling">
               🎨
@@ -1777,6 +1891,17 @@ export default function BuilderPage() {
           </button>
         </div>
         <div className="row-actions">
+          {offGridIds.length > 0 && (
+            <button
+              type="button"
+              className="btn btn--danger"
+              title="Blocks pulled out of normal flow can overlap other content or sit outside the page entirely. This puts every one of them back."
+              onClick={() => offGridIds.forEach(returnToGrid)}
+            >
+              ⚠ Put {offGridIds.length} floating block
+              {offGridIds.length === 1 ? "" : "s"} back in the grid
+            </button>
+          )}
           {(dirtyBlockIds.size > 0 || dirtyTextKeys.size > 0) && (
             <button
               type="button"

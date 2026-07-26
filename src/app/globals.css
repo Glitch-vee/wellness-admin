@@ -3457,6 +3457,26 @@ textarea {
   width: 100%;
 }
 
+/* Card warning: this block is floating outside normal flow, so it can overlap
+   other blocks or sit off the page where it cannot be clicked. Clickable —
+   it puts the block straight back into the grid. */
+.bcard__offgrid {
+  flex: none;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  padding: 4px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #b23c17;
+  border: 1px solid rgba(210, 70, 30, 0.55);
+  background: rgba(210, 70, 30, 0.12);
+}
+
+.bcard__offgrid:hover {
+  background: rgba(210, 70, 30, 0.22);
+}
+
 /* Collapsed card: says "this block has its own styling". */
 .bcard__stylechip {
   flex: none;
