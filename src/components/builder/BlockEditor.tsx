@@ -1424,6 +1424,18 @@ export function StylePanel({
 
       <fieldset className="bkstyle__group">
         <legend>Position</legend>
+        {/* The free nudge the canvas writes when you drag a block. Shown for
+            EVERY block, not just overlay ones — dragging moves any block, so
+            the rail has to be able to show and correct the result, or the two
+            surfaces disagree about where the block actually is. */}
+        <div className="bkstyle__row">
+          {offsetNum("Nudge X", "dx")}
+          {offsetNum("Nudge Y", "dy")}
+        </div>
+        <p className="hint">
+          How far this block sits from where the layout put it. Set by dragging
+          it on the canvas; 0 puts it back exactly in line.
+        </p>
         <div className="bkstyle__row">
           {sel("Visibility", "hideOn", HIDE_ON_OPTIONS)}
           {/* Not the generic sel(): switching back to Default has to clear the
