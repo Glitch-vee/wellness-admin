@@ -476,7 +476,7 @@ export default function BuilderPage() {
         targetId?: string; // cms:block-rowjoin — the block to sit beside
         before?: boolean; //  ...on its left (true) or right (false)
         /** cms:block-grid — {span, col} for every block in the affected row. */
-        places?: { id: string; span: number; col: number }[];
+        places?: { id: string; span: number; col: number; rows?: number }[];
       };
       /** Shared layer-number nudge for cms:block-key's [ / ] and the
        * on-canvas layer buttons — only ever acts on the currently selected
@@ -615,6 +615,12 @@ export default function BuilderPage() {
             else delete layout.cols;
             if (layout.cols && p.col >= 1 && p.col <= 13 - p.span) layout.colStart = p.col;
             else delete layout.colStart;
+            // Row span is optional on the message: a column-only change must
+            // not silently reset a block's height back to one row.
+            if (p.rows !== undefined) {
+              if (p.rows >= 2 && p.rows <= 6) layout.rows = p.rows;
+              else delete layout.rows;
+            }
             return { ...b, layout };
           })
         );

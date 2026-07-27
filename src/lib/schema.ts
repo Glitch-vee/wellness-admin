@@ -335,6 +335,9 @@ function sanitizeLayout(value: unknown): Record<string, unknown> {
   if (out.cols && colStart >= 1 && colStart <= 13 - (out.cols as number)) {
     out.colStart = Math.round(colStart);
   }
+  // How many grid rows tall — 1 is the default and needs no value stored.
+  const rows = Number(l.rows);
+  if (rows >= 2 && rows <= 6) out.rows = Math.round(rows);
   const span = Number(l.span);
   if (span >= 1 && span <= 5) out.span = Math.round(span);
   const col = Number(l.col);
