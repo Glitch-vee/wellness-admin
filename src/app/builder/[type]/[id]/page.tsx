@@ -485,7 +485,10 @@ export default function BuilderPage() {
        * into z-index at render time) AND the reflow-grouping tag, so this
        * is the same number the rail's Layer field shows — not a hidden
        * separate value. */
-      const nudgeLayer = (action: "front" | "back" | "forward" | "backward") => {
+      const nudgeLayer = (
+        action: "front" | "back" | "forward" | "backward",
+        geo?: { top?: string; left?: string; width?: string }
+      ) => {
         const id = selectedRef.current;
         if (!id) return;
         const block = blocksRef.current.find((r) => r.id === id);
@@ -499,13 +502,39 @@ export default function BuilderPage() {
               ? 0
               : Math.min(999, Math.max(0, cur + (action === "forward" ? 1 : -1)));
         props.layer = String(next);
-        // Layer is stacking order, full stop. It used to ALSO flip the block
-        // to position:overlay — which meant one ⏮/⏭ click, or a stray `[`
-        // keypress (the keyboard path passed no geometry, so it landed at
-        // 0,0), tore the block out of the page. Leaving flow is now only ever
-        // explicit, via the rail's Position control.
-        setBlocks((bs) => bs.map((b) => (b.id === id ? { ...b, props } : b)));
-        setDraft((cur2) => (cur2 ? { ...cur2, props } : cur2));
+        // A layer is a plane. Blocks on layer 0 are the page's normal layout
+        // and share space with each other. Raising a block above 0 lifts it
+        // off that layout: it floats, stacks by layer number, and stops
+        // interacting with anything below it — which is what a layer means.
+        // Dropping it back to 0 puts it back into the flow it came from.
+        //
+        // Lifting requires knowing where the block currently is, or it lands
+        // in the section's top-left corner. The canvas always measures and
+        // sends that; if it somehow didn't, DON'T lift — changing a number
+        // must never be able to fling a block into the corner, which is
+        // exactly what the old keyboard path did.
+        const style = jsonOf(block, "style");
+        if (next === 0) {
+          delete style.position;
+          delete style.top;
+          delete style.left;
+          delete style.right;
+          delete style.bottom;
+        } else if (style.position !== "overlay" && style.position !== "sticky") {
+          if (geo?.top && geo?.left) {
+            style.position = "overlay";
+            style.top = geo.top;
+            style.left = geo.left;
+            // An out-of-flow box shrink-wraps to its content — keep the width
+            // it had, so lifting it doesn't also resize it.
+            if (geo.width) style.width = geo.width;
+          } else {
+            showFlash({ text: "Couldn't read the block's position — not lifted", tone: "warn" });
+          }
+        }
+        setBlocks((bs) => bs.map((b) => (b.id === id ? { ...b, props, style } : b)));
+        setDraft((cur2) => (cur2 ? { ...cur2, props, style } : cur2));
+        post({ type: "cms:block-style", id, style });
         setDirtyBlockIds((prev) => {
           const next2 = new Set(prev);
           next2.add(id);
@@ -876,7 +905,7 @@ export default function BuilderPage() {
         const step = d.shift ? 10 : 1;
         if (d.k === "[" || d.k === "]") {
           const fwd = d.k === "]";
-          nudgeLayer(d.shift ? (fwd ? "front" : "back") : fwd ? "forward" : "backward");
+          nudgeLayer(d.shift ? (fwd ? "front" : "back") : fwd ? "forward" : "backward", d);
         } else if (overlay && (d.k === "ArrowUp" || d.k === "ArrowDown")) {
           const cur = Number.parseInt(String(style.top ?? "0"), 10) || 0;
           patchBlockStyleRef.current({
@@ -904,7 +933,7 @@ export default function BuilderPage() {
       } else if (d?.type === "cms:block-layer" && d.id && d.action) {
         // On-canvas layer buttons — same constraint as cms:block-key.
         if (d.id !== selectedRef.current) return;
-        nudgeLayer(d.action);
+        nudgeLayer(d.action, d);
       } else if (d?.type === "cms:focus" && d.key) {
         // Keyed text clicked in the preview — open TextPop over it.
         if (!textRowsRef.current.some((r) => r.key === d.key)) return;
