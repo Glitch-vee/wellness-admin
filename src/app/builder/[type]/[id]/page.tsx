@@ -596,25 +596,15 @@ export default function BuilderPage() {
         const mStyle = jsonOf(moved, "style");
         delete mStyle.dx;
         delete mStyle.dy;
+        const movedNext = { ...moved, props: mProps, layout: mLayout, style: mStyle };
+        const targetNext = { ...target, props: tProps };
         setBlocks((bs) =>
-          bs.map((b) =>
-            b.id === id
-              ? { ...b, props: mProps, layout: mLayout, style: mStyle }
-              : b.id === targetId
-                ? { ...b, props: tProps }
-                : b
-          )
+          bs.map((b) => (b.id === id ? movedNext : b.id === targetId ? targetNext : b))
         );
         if (id === selectedRef.current)
           setDraft((cur) =>
             cur ? { ...cur, props: mProps, layout: mLayout, style: mStyle } : cur
           );
-        setDirtyBlockIds((prev) => {
-          const next = new Set(prev);
-          next.add(id);
-          next.add(targetId);
-          return next;
-        });
 
         // Grouping only applies to ADJACENT blocks, so slot it against the
         // target on the side it was dropped.
@@ -622,13 +612,49 @@ export default function BuilderPage() {
         const scope = [...top];
         const from = scope.findIndex((r) => r.id === id);
         const at = scope.findIndex((r) => r.id === targetId);
-        if (from >= 0 && at >= 0) {
-          const [m] = scope.splice(from, 1);
-          const tIdx = scope.findIndex((r) => r.id === targetId);
-          scope.splice(d.before ? tIdx : tIdx + 1, 0, m);
-          applyOrderRef.current(flattenTree(scope, childrenOf));
-        }
-        showFlash({ text: "Sharing a row — width split evenly", tone: "ok" });
+        const reordered =
+          from >= 0 && at >= 0
+            ? (() => {
+                const s = [...scope];
+                const [m] = s.splice(from, 1);
+                const tIdx = s.findIndex((r) => r.id === targetId);
+                s.splice(d.before ? tIdx : tIdx + 1, 0, m);
+                return flattenTree(s, childrenOf);
+              })()
+            : null;
+
+        // The row tag MUST be written to the database before anything
+        // reorders. applyOrder POSTs /api/reorder and then reloads the
+        // iframe -- and the reload re-renders from the database, where an
+        // unsaved props.layer does not exist. That is why joining two blocks
+        // always ended with them full-width and stacked again, under a green
+        // "sharing a row" toast: the tag only ever lived in React state and
+        // the reload threw it away, every single time. Save first, then move.
+        void (async () => {
+          try {
+            await Promise.all(
+              [movedNext, targetNext].map((b) =>
+                sendSectionRef.current(`/api/table/${cfg.childTable}/${b.id}`, "PUT", b)
+              )
+            );
+            setDirtyBlockIds((prev) => {
+              const next = new Set(prev);
+              next.delete(id);
+              next.delete(targetId);
+              return next;
+            });
+            if (reordered) await applyOrderRef.current(reordered);
+            else post({ type: "cms:reload" });
+            showFlash({ text: "Sharing a row — width split evenly", tone: "ok" });
+          } catch (err) {
+            showFlash({
+              text: `Couldn't put them side by side. ${
+                err instanceof Error ? err.message : "Save failed"
+              }`,
+              tone: "warn",
+            });
+          }
+        })();
       } else if (d?.type === "cms:block-place" && d.id) {
         // Canvas drag, unified. Carries where the block landed in the ORDER
         // (reorder/beforeId — the old cms:block-drop) and/or which of the six
