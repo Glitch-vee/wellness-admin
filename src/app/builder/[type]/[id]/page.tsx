@@ -476,6 +476,8 @@ export default function BuilderPage() {
         dy?: string;
         targetId?: string; // cms:block-rowjoin — the block to sit beside
         before?: boolean; //  ...on its left (true) or right (false)
+        /** cms:block-grid — {span, col} for every block in the affected row. */
+        places?: { id: string; span: number; col: number }[];
       };
       /** Shared layer-number nudge for cms:block-key's [ / ] and the
        * on-canvas layer buttons — only ever acts on the currently selected
@@ -563,6 +565,58 @@ export default function BuilderPage() {
           next.add(id);
           return next;
         });
+      } else if (d?.type === "cms:block-grid" && d.id && d.places) {
+        // Grid placement: one {span, col} per block in the affected row. The
+        // canvas has ALREADY applied this to the live elements, so this is
+        // pure persistence — no reload, no re-render, nothing that could undo
+        // what the user just watched happen.
+        if (!cfg) return;
+        const places = d.places;
+        const ids = new Set(places.map((p) => p.id));
+        setBlocks((bs) =>
+          bs.map((b) => {
+            if (!ids.has(b.id)) return b;
+            const p = places.find((q) => q.id === b.id)!;
+            const layout = layoutOf(b);
+            if (p.span >= 1 && p.span < 6) layout.span = p.span;
+            else delete layout.span;
+            if (layout.span && p.col >= 1 && p.col <= 7 - p.span) layout.col = p.col;
+            else delete layout.col;
+            return { ...b, layout };
+          })
+        );
+        setDirtyBlockIds((prev) => {
+          const next = new Set(prev);
+          for (const id of ids) next.add(id);
+          return next;
+        });
+        // Adjacency matters for reading order, but reordering goes through
+        // /api/reorder, which reloads the iframe -- so only do it when the
+        // order genuinely changed, and let the canvas keep its live result.
+        const gid = d.id;
+        if (d.beforeId !== undefined) {
+          const list = blocksRef.current;
+          const { top, childrenOf } = buildTree(list);
+          const scope = [...top];
+          const from = scope.findIndex((r) => r.id === gid);
+          if (from >= 0) {
+            const [m] = scope.splice(from, 1);
+            const at = d.beforeId ? scope.findIndex((r) => r.id === d.beforeId) : -1;
+            const insertAt = at < 0 ? scope.length : at;
+            if (insertAt !== from) {
+              scope.splice(insertAt, 0, m);
+              setBlocks((bs) => {
+                const order = new Map(
+                  flattenTree(scope, childrenOf).map((r, i) => [r.id, (i + 1) * 10])
+                );
+                return [...bs]
+                  .map((b) => ({ ...b, sort_order: order.get(b.id) ?? b.sort_order }))
+                  .sort((a, b) => Number(a.sort_order) - Number(b.sort_order));
+              });
+            }
+          }
+        }
+        showFlash({ text: "Sharing a row — width split evenly", tone: "ok" });
       } else if (d?.type === "cms:block-rowjoin" && d.id && d.targetId) {
         // Side by side. Both blocks get the same non-numeric props.layer tag,
         // which the site renders as one flex row splitting its width evenly
