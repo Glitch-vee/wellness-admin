@@ -476,7 +476,7 @@ export default function BuilderPage() {
         targetId?: string; // cms:block-rowjoin — the block to sit beside
         before?: boolean; //  ...on its left (true) or right (false)
         /** cms:block-grid — {span, col} for every block in the affected row. */
-        places?: { id: string; span: number; col: number; rows?: number }[];
+        places?: { id: string; span: number; col: number; rows?: number; row?: number }[];
       };
       /** Shared layer-number nudge for cms:block-key's [ / ] and the
        * on-canvas layer buttons — only ever acts on the currently selected
@@ -620,6 +620,12 @@ export default function BuilderPage() {
             if (p.rows !== undefined) {
               if (p.rows >= 2 && p.rows <= 6) layout.rows = p.rows;
               else delete layout.rows;
+            }
+            // Explicit row, for a block dropped into empty grid space. Also
+            // optional, for the same reason as rows.
+            if (p.row !== undefined) {
+              if (p.row >= 1 && p.row <= 60) layout.row = p.row;
+              else delete layout.row;
             }
             return { ...b, layout };
           })

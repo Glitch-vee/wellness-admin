@@ -22,6 +22,7 @@ export function placementOf(layout: Record<string, unknown> | undefined): {
   cols: number;
   colStart: number | null;
   rows: number;
+  rowStart: number | null;
 } {
   const l = layout ?? {};
   const rawCols = Number(l.cols);
@@ -41,9 +42,11 @@ export function placementOf(layout: Record<string, unknown> | undefined): {
         ? Math.round(legacyStart) * 2 - 1
         : NaN;
   const rawRows = Number(l.rows);
+  const rawRowStart = Number(l.row);
   return {
     cols,
     colStart: start >= 1 && start <= GRID_COLS + 1 - cols ? start : null,
     rows: rawRows >= 1 && rawRows <= MAX_ROWS ? Math.round(rawRows) : 1,
+    rowStart: rawRowStart >= 1 && rawRowStart <= 60 ? Math.round(rawRowStart) : null,
   };
 }
