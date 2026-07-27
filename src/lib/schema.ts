@@ -325,14 +325,18 @@ function sanitizeLayout(value: unknown): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   if (!value || typeof value !== "object" || Array.isArray(value)) return out;
   const l = value as Record<string, unknown>;
-  // 1…5 (a 6-span block is full width and carries no class at all). This used
-  // to allowlist [2,3,4,6]: spans 1 and 5 are offered by the rail AND by the
-  // canvas resize handle, previewed live — and then silently dropped here, so
-  // a ⅙/⅚ block snapped back to full width on the next reload.
+  // Placement in the 12-column grid. `cols` 1–12 (12 = full width), and
+  // `colStart` bounded so a block can never be placed past the last column.
+  // `span`/`col` are the legacy sixths form: still accepted so old rows keep
+  // working, never written any more (the renderer reads them as ×2).
+  const cols = Number(l.cols);
+  if (cols >= 1 && cols <= 12) out.cols = Math.round(cols);
+  const colStart = Number(l.colStart);
+  if (out.cols && colStart >= 1 && colStart <= 13 - (out.cols as number)) {
+    out.colStart = Math.round(colStart);
+  }
   const span = Number(l.span);
   if (span >= 1 && span <= 5) out.span = Math.round(span);
-  // Which of the 6 columns the block starts in — only meaningful alongside a
-  // span, and it can never push the block past the last column.
   const col = Number(l.col);
   if (out.span && col >= 1 && col <= 7 - (out.span as number)) out.col = Math.round(col);
   if (["left", "center", "right"].includes(String(l.align))) {

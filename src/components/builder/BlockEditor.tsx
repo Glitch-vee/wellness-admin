@@ -50,6 +50,7 @@ import {
   POSITION_OPTIONS,
   type StyleOption,
 } from "@/lib/blockstyle";
+import { placementOf } from "@/lib/gridplace";
 
 /**
  * The rich editor for one block, split into two tabs:
@@ -103,6 +104,7 @@ export default function BlockEditor({
 }) {
   const { kind, heading, body, media_url } = draft;
   const layout = draft.layout ?? {};
+  const place = placementOf(layout);
   const props = draft.props ?? {};
   const style = draft.style ?? {};
   const [tab, setTab] = useState<"content" | "style">("content");
@@ -899,47 +901,55 @@ export default function BlockEditor({
     <fieldset className="bkedit__layout">
       <legend>Layout</legend>
         <div className="bkedit__layoutrow">
+          {/* Width in twelfths. Twelve divides by 2, 3, 4 and 6, so rows of
+              two, three, four or six blocks all land on exact fractions —
+              and uneven pairs like ⅔+⅓ or ¾+¼ are expressible too, which
+              the old sixths could not do. Writing `cols` clears the legacy
+              `span` so a block never carries two conflicting widths. */}
           <div className="field">
             <label>Width</label>
             <select
-              value={String(layout.span ?? "")}
+              value={String(place.cols)}
               onChange={(e) =>
                 patchLayout({
-                  span: e.target.value === "" ? null : Number(e.target.value),
+                  cols: Number(e.target.value) === 12 ? null : Number(e.target.value),
+                  span: null,
+                  col: null,
                 })
               }
             >
-              <option value="">Full width</option>
-              <option value="5">Five sixths</option>
-              <option value="4">Two thirds</option>
-              <option value="3">Half</option>
-              <option value="2">One third</option>
-              <option value="1">One sixth</option>
+              <option value="12">Full width</option>
+              <option value="10">Five sixths</option>
+              <option value="9">Three quarters</option>
+              <option value="8">Two thirds</option>
+              <option value="6">Half</option>
+              <option value="4">One third</option>
+              <option value="3">One quarter</option>
+              <option value="2">One sixth</option>
+              <option value="1">One twelfth</option>
             </select>
           </div>
-          {/* Which of the 6 grid columns the block starts in. Only means
-              anything once the block is narrower than full width — a
-              full-width block has exactly one place it can be. This is the
-              same value dragging a block sideways on the canvas writes. */}
-          {Number(layout.span) >= 1 && Number(layout.span) <= 5 && (
+          {/* Which column the block starts in. Only means anything once it is
+              narrower than full width — a full-width block has exactly one
+              place it can be. Same value dragging it sideways writes. */}
+          {place.cols < 12 && (
             <div className="field">
               <label>Start column</label>
               <select
-                value={String(layout.col ?? "")}
+                value={String(place.colStart ?? "")}
                 onChange={(e) =>
                   patchLayout({
-                    col: e.target.value === "" ? null : Number(e.target.value),
+                    colStart: e.target.value === "" ? null : Number(e.target.value),
+                    col: null,
                   })
                 }
               >
                 <option value="">Auto</option>
-                {Array.from({ length: 7 - Number(layout.span) }, (_, i) => i + 1).map(
-                  (c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  )
-                )}
+                {Array.from({ length: 13 - place.cols }, (_, i) => i + 1).map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
               </select>
             </div>
           )}

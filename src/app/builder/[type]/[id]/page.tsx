@@ -26,6 +26,7 @@ import MediaPop, {
 } from "@/components/builder/MediaPop";
 import FieldInput from "@/components/FieldInput";
 import InlinePreview from "@/components/InlinePreview";
+import { placementOf } from "@/lib/gridplace";
 
 /**
  * The visual page builder: block rail on the left, the real live page on the
@@ -101,19 +102,17 @@ function mergeStyle(
 function layoutChips(row: Row): string[] {
   const l = layoutOf(row);
   const chips: string[] = [];
-  const span = Number(l.span);
-  if (span === 5) chips.push("⅚");
-  else if (span === 4) chips.push("⅔");
-  else if (span === 3) chips.push("½");
-  else if (span === 2) chips.push("⅓");
-  else if (span === 1) chips.push("⅙");
+  const { cols, colStart } = placementOf(l);
+  const FRACTION: Record<number, string> = {
+    1: "1/12", 2: "⅙", 3: "¼", 4: "⅓", 6: "½", 8: "⅔", 9: "¾", 10: "⅚",
+  };
+  if (cols < 12) chips.push(FRACTION[cols] ?? `${cols}/12`);
   if (l.align === "left") chips.push("←");
   else if (l.align === "center") chips.push("↔");
   else if (l.align === "right") chips.push("→");
   if (l.shape === "circle") chips.push("◯");
   if (l.size === "big") chips.push("L");
-  const col = Number(l.col);
-  if (span >= 1 && span <= 5 && col >= 1 && col <= 6) chips.push(`col ${col}`);
+  if (colStart !== null) chips.push(`col ${colStart}`);
   return chips;
 }
 
@@ -607,10 +606,15 @@ export default function BuilderPage() {
             if (!ids.has(b.id)) return b;
             const p = places.find((q) => q.id === b.id)!;
             const layout = layoutOf(b);
-            if (p.span >= 1 && p.span < 6) layout.span = p.span;
-            else delete layout.span;
-            if (layout.span && p.col >= 1 && p.col <= 7 - p.span) layout.col = p.col;
-            else delete layout.col;
+            // Always drop the legacy sixths fields — leaving them behind would
+            // mean two placements on one block, and the renderer would have to
+            // guess which one is current.
+            delete layout.span;
+            delete layout.col;
+            if (p.span >= 1 && p.span < 12) layout.cols = p.span;
+            else delete layout.cols;
+            if (layout.cols && p.col >= 1 && p.col <= 13 - p.span) layout.colStart = p.col;
+            else delete layout.colStart;
             return { ...b, layout };
           })
         );
