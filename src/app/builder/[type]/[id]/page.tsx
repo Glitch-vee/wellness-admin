@@ -472,6 +472,10 @@ export default function BuilderPage() {
         action?: "front" | "back" | "forward" | "backward"; // cms:block-layer
         col?: number; // cms:block-place — 1-based column in the 6-col grid
         reorder?: boolean; // cms:block-place — whether beforeId is meaningful
+        dx?: string; // cms:block-shift — free px nudge from the flow position
+        dy?: string;
+        targetId?: string; // cms:block-rowjoin — the block to sit beside
+        before?: boolean; //  ...on its left (true) or right (false)
       };
       /** Shared layer-number nudge for cms:block-key's [ / ] and the
        * on-canvas layer buttons — only ever acts on the currently selected
@@ -540,6 +544,91 @@ export default function BuilderPage() {
         scope.splice(insertAt, 0, moved);
         if (pid) childrenOf.set(pid, scope);
         applyOrderRef.current(flattenTree(pid ? top : scope, childrenOf));
+      } else if (d?.type === "cms:block-shift" && d.id) {
+        // Free nudge: how far the block sits from where flow put it, in px.
+        // Paint-only (a translate()), so it never collapses a row, never
+        // overlaps by surprise, and never needs position:absolute.
+        if (!cfg) return;
+        const id = d.id;
+        const block = blocksRef.current.find((r) => r.id === id);
+        if (!block) return;
+        const style = jsonOf(block, "style");
+        if (d.dx !== undefined) style.dx = d.dx;
+        if (d.dy !== undefined) style.dy = d.dy;
+        setBlocks((bs) => bs.map((b) => (b.id === id ? { ...b, style } : b)));
+        if (id === selectedRef.current)
+          setDraft((cur) => (cur ? { ...cur, style } : cur));
+        setDirtyBlockIds((prev) => {
+          const next = new Set(prev);
+          next.add(id);
+          return next;
+        });
+      } else if (d?.type === "cms:block-rowjoin" && d.id && d.targetId) {
+        // Side by side. Both blocks get the same non-numeric props.layer tag,
+        // which the site renders as one flex row splitting its width evenly
+        // between whatever is in it — so a third block joining the same tag
+        // makes it a three-way split automatically, with no ratios to manage.
+        if (!cfg) return;
+        const id = d.id;
+        const targetId = d.targetId;
+        if (id === targetId) return;
+        const list = blocksRef.current;
+        const moved = list.find((r) => r.id === id);
+        const target = list.find((r) => r.id === targetId);
+        if (!moved || !target) return;
+
+        const tProps = jsonOf(target, "props");
+        const existing = String(tProps.layer ?? "").trim();
+        // Reuse the target's row if it already has one; a numeric layer is
+        // stacking order, not a row, so it never counts as one.
+        const tag =
+          existing && Number.isNaN(Number(existing))
+            ? existing
+            : `r-${Math.random().toString(36).slice(2, 8)}`;
+        const mProps = jsonOf(moved, "props");
+        mProps.layer = tag;
+        tProps.layer = tag;
+        // A row member sizes by its share of the row, so any leftover grid
+        // width/offset would just fight it.
+        const mLayout = layoutOf(moved);
+        delete mLayout.span;
+        delete mLayout.col;
+        const mStyle = jsonOf(moved, "style");
+        delete mStyle.dx;
+        delete mStyle.dy;
+        setBlocks((bs) =>
+          bs.map((b) =>
+            b.id === id
+              ? { ...b, props: mProps, layout: mLayout, style: mStyle }
+              : b.id === targetId
+                ? { ...b, props: tProps }
+                : b
+          )
+        );
+        if (id === selectedRef.current)
+          setDraft((cur) =>
+            cur ? { ...cur, props: mProps, layout: mLayout, style: mStyle } : cur
+          );
+        setDirtyBlockIds((prev) => {
+          const next = new Set(prev);
+          next.add(id);
+          next.add(targetId);
+          return next;
+        });
+
+        // Grouping only applies to ADJACENT blocks, so slot it against the
+        // target on the side it was dropped.
+        const { top, childrenOf } = buildTree(list);
+        const scope = [...top];
+        const from = scope.findIndex((r) => r.id === id);
+        const at = scope.findIndex((r) => r.id === targetId);
+        if (from >= 0 && at >= 0) {
+          const [m] = scope.splice(from, 1);
+          const tIdx = scope.findIndex((r) => r.id === targetId);
+          scope.splice(d.before ? tIdx : tIdx + 1, 0, m);
+          applyOrderRef.current(flattenTree(scope, childrenOf));
+        }
+        showFlash({ text: "Sharing a row — width split evenly", tone: "ok" });
       } else if (d?.type === "cms:block-place" && d.id) {
         // Canvas drag, unified. Carries where the block landed in the ORDER
         // (reorder/beforeId — the old cms:block-drop) and/or which of the six

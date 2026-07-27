@@ -107,6 +107,8 @@ const STYLE_ENUMS: Record<string, string[]> = {
   height: [],
   // Free-form escape hatches beyond the preset tokens.
   opacity: [],
+  dx: [],
+  dy: [],
   rotate: [],
   scale: [],
   borderWidth: [],
@@ -200,6 +202,11 @@ export function cleanValue(prop: string, value: unknown): string | null {
       return OPACITY_RE.test(v)
         ? String(Math.min(100, Math.max(0, parseInt(v, 10))))
         : null;
+    // Free px nudge in each axis — how far the block sits from where flow put
+    // it. Wider range than top/left because it's paint-only and safe.
+    case "dx":
+    case "dy":
+      return OFFSET_RE.test(v) ? clampPx(v, -4000, 4000) : null;
     case "rotate":
       return ROTATE_RE.test(v)
         ? String(Math.min(360, Math.max(-360, parseInt(v, 10))))
